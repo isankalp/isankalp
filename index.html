@@ -1,61 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Goals Tracker</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <div class="app">
-    <header class="app-header">
-      <h1>Goals Tracker</h1>
-      <p class="subtitle">Set goals, track progress, get things done.</p>
-    </header>
-
-    <section class="stats" id="stats">
-      <div class="stat-card">
-        <span class="stat-value" id="stat-total">0</span>
-        <span class="stat-label">Total</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-value" id="stat-active">0</span>
-        <span class="stat-label">Active</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-value" id="stat-done">0</span>
-        <span class="stat-label">Completed</span>
-      </div>
-    </section>
-
-    <form id="goal-form" class="goal-form">
-      <input type="text" id="goal-title" placeholder="Goal title" required maxlength="120">
-      <input type="text" id="goal-description" placeholder="Description (optional)" maxlength="300">
-      <div class="goal-form-row">
-        <select id="goal-category">
-          <option value="Personal">Personal</option>
-          <option value="Career">Career</option>
-          <option value="Health">Health</option>
-          <option value="Finance">Finance</option>
-          <option value="Learning">Learning</option>
-          <option value="Other">Other</option>
-        </select>
-        <input type="date" id="goal-due">
-        <button type="submit">Add Goal</button>
-      </div>
-    </form>
-
-    <div class="filters" id="filters">
-      <button class="filter-btn active" data-filter="all">All</button>
-      <button class="filter-btn" data-filter="active">Active</button>
-      <button class="filter-btn" data-filter="completed">Completed</button>
-    </div>
-
-    <ul class="goal-list" id="goal-list"></ul>
-
-    <p class="empty-state" id="empty-state">No goals yet. Add one above to get started.</p>
-  </div>
-
-  <script src="app.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Goals Tracker</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
