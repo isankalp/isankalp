@@ -7,6 +7,7 @@ import {
   isTaskComplete,
   minutesDone,
   percentComplete,
+  sortByPriority,
   totalMinutes,
   type Task,
 } from './models'
@@ -19,6 +20,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     minutesPerSubtask: 5,
     totalSubtasks: 5,
     completedSubtasks: 2,
+    priority: 'Medium',
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -121,5 +123,24 @@ describe('day rollups', () => {
 
   it('is 0% for a day with no tasks', () => {
     expect(dayPercentComplete([])).toBe(0)
+  })
+})
+
+describe('sortByPriority', () => {
+  it('orders High before Medium before Low', () => {
+    const tasks = [
+      makeTask({ id: 'low', priority: 'Low', createdAt: 1 }),
+      makeTask({ id: 'high', priority: 'High', createdAt: 2 }),
+      makeTask({ id: 'medium', priority: 'Medium', createdAt: 3 }),
+    ]
+    expect(sortByPriority(tasks).map((t) => t.id)).toEqual(['high', 'medium', 'low'])
+  })
+
+  it('breaks ties within the same priority by creation order', () => {
+    const tasks = [
+      makeTask({ id: 'second', priority: 'High', createdAt: 2 }),
+      makeTask({ id: 'first', priority: 'High', createdAt: 1 }),
+    ]
+    expect(sortByPriority(tasks).map((t) => t.id)).toEqual(['first', 'second'])
   })
 })

@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useSettings } from '../context/SettingsContext'
 import { downloadExport, exportData, importData } from '../lib/exportImport'
+import { notificationPermission, notificationSupported, requestNotificationPermission } from '../lib/reminders'
 import type { CompletedBehavior, DefaultView, Theme } from '../db/models'
 
 function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -48,6 +49,19 @@ export default function Settings() {
   const { settings, updateSettings } = useSettings()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [permission, setPermission] = useState(notificationPermission())
+
+  async function handleToggleReminders() {
+    if (settings.remindersEnabled) {
+      await updateSettings({ remindersEnabled: false })
+      return
+    }
+    const result = await requestNotificationPermission()
+    setPermission(result)
+    if (result === 'granted') {
+      await updateSettings({ remindersEnabled: true })
+    }
+  }
 
   async function handleExport() {
     const json = await exportData()
@@ -101,6 +115,51 @@ export default function Settings() {
             ]}
           />
         </SettingRow>
+
+        <SettingRow
+          label="Enable Reminders"
+          hint={
+            !notificationSupported()
+              ? 'Notifications are not supported in this browser.'
+              : permission === 'denied'
+                ? 'Denied — enable in browser settings'
+                : 'Get notified about not-started tasks and empty days while the app is open.'
+          }
+        >
+          <button
+            type="button"
+            onClick={handleToggleReminders}
+            disabled={!notificationSupported() || permission === 'denied'}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium disabled:opacity-40 ${
+              settings.remindersEnabled
+                ? 'bg-indigo-600 text-white'
+                : 'border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            {settings.remindersEnabled ? 'Enabled' : 'Enable'}
+          </button>
+        </SettingRow>
+
+        {settings.remindersEnabled && (
+          <>
+            <SettingRow label="Not-started reminder time" hint="Nudge if a task still has 0 progress by this time.">
+              <input
+                type="time"
+                value={settings.notStartedThreshold}
+                onChange={(e) => updateSettings({ notStartedThreshold: e.target.value })}
+                className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+              />
+            </SettingRow>
+            <SettingRow label="Empty-day nudge time" hint="Prompt to plan the day if nothing's been added yet.">
+              <input
+                type="time"
+                value={settings.eveningNudgeTime}
+                onChange={(e) => updateSettings({ eveningNudgeTime: e.target.value })}
+                className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+              />
+            </SettingRow>
+          </>
+        )}
 
         <SettingRow label="Export data" hint="Download all goals, days, and tasks as a JSON file.">
           <button

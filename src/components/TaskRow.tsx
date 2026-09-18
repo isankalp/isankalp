@@ -1,10 +1,26 @@
 import clsx from 'clsx'
-import type { KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { db } from '../db/db'
-import { clampCompleted, isTaskComplete, minutesDone, percentComplete, totalMinutes, type Task } from '../db/models'
+import {
+  PRIORITIES,
+  clampCompleted,
+  isTaskComplete,
+  minutesDone,
+  percentComplete,
+  totalMinutes,
+  type Priority,
+  type Task,
+} from '../db/models'
+import FocusTimer from './FocusTimer'
 
 function blurOnEnter(e: KeyboardEvent<HTMLInputElement>) {
   if (e.key === 'Enter') e.currentTarget.blur()
+}
+
+const PRIORITY_STYLE: Record<Priority, string> = {
+  High: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300',
+  Medium: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+  Low: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
 }
 
 export default function TaskRow({ task }: { task: Task }) {
@@ -12,6 +28,8 @@ export default function TaskRow({ task }: { task: Task }) {
   const percent = percentComplete(task)
   const done = minutesDone(task)
   const total = totalMinutes(task)
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [focusOpen, setFocusOpen] = useState(false)
 
   async function commitCompleted(value: number) {
     const clamped = clampCompleted(value, task.totalSubtasks)
@@ -41,6 +59,14 @@ export default function TaskRow({ task }: { task: Task }) {
     })
   }
 
+  async function commitPriority(priority: Priority) {
+    await db.tasks.update(task.id, { priority, updatedAt: Date.now() })
+  }
+
+  async function commitNotes(value: string) {
+    await db.tasks.update(task.id, { notes: value, updatedAt: Date.now() })
+  }
+
   async function deleteTask() {
     await db.tasks.delete(task.id)
   }
@@ -57,20 +83,34 @@ export default function TaskRow({ task }: { task: Task }) {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <input
-            type="text"
-            defaultValue={task.title}
-            key={`${task.id}-title`}
-            onBlur={(e) => commitTitle(e.target.value)}
-            onKeyDown={blurOnEnter}
-            maxLength={120}
-            aria-label="Task title"
-            className={clsx(
-              'font-semibold text-sm w-full',
-              fieldClass,
-              complete && 'line-through text-slate-500 dark:text-slate-400',
-            )}
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              defaultValue={task.title}
+              key={`${task.id}-title`}
+              onBlur={(e) => commitTitle(e.target.value)}
+              onKeyDown={blurOnEnter}
+              maxLength={120}
+              aria-label="Task title"
+              className={clsx(
+                'font-semibold text-sm flex-1 min-w-0',
+                fieldClass,
+                complete && 'line-through text-slate-500 dark:text-slate-400',
+              )}
+            />
+            <select
+              value={task.priority}
+              onChange={(e) => commitPriority(e.target.value as Priority)}
+              aria-label="Priority"
+              className={clsx('text-[10px] font-medium rounded-full px-1.5 py-0.5 border-0 shrink-0', PRIORITY_STYLE[task.priority])}
+            >
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
           <p className={clsx('text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center flex-wrap gap-x-1', complete && 'line-through')}>
             <span>
               {done} / {total} min &middot;
@@ -101,15 +141,36 @@ export default function TaskRow({ task }: { task: Task }) {
             <span>subtasks</span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={deleteTask}
-          aria-label={`Delete ${task.title}`}
-          className="text-slate-400 hover:text-red-600 text-xs shrink-0 mt-0.5"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1 shrink-0 mt-0.5">
+          <button
+            type="button"
+            onClick={() => setNotesOpen((v) => !v)}
+            aria-label={task.notes ? 'Edit note' : 'Add note'}
+            className={clsx(
+              'text-xs',
+              task.notes ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-300 dark:text-slate-600 hover:text-slate-500',
+            )}
+          >
+            📝
+          </button>
+          <button type="button" onClick={deleteTask} aria-label={`Delete ${task.title}`} className="text-slate-400 hover:text-red-600 text-xs">
+            ✕
+          </button>
+        </div>
       </div>
+
+      {notesOpen && (
+        <textarea
+          defaultValue={task.notes ?? ''}
+          key={`${task.id}-notes`}
+          onBlur={(e) => commitNotes(e.target.value)}
+          placeholder="Add a note for this task..."
+          maxLength={2000}
+          rows={2}
+          aria-label="Task notes"
+          className="mt-2 w-full text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 resize-y"
+        />
+      )}
 
       <div className="flex items-center gap-2 mt-2">
         <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
@@ -151,7 +212,23 @@ export default function TaskRow({ task }: { task: Task }) {
           +
         </button>
         <span className="text-[11px] text-slate-400">of {task.totalSubtasks} subtasks</span>
+        <button
+          type="button"
+          onClick={() => setFocusOpen(true)}
+          disabled={complete}
+          className="ml-auto text-[11px] px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+        >
+          ▶ Start Focus
+        </button>
       </div>
+
+      {focusOpen && (
+        <FocusTimer
+          task={task}
+          onClose={() => setFocusOpen(false)}
+          onComplete={() => commitCompleted(task.completedSubtasks + 1)}
+        />
+      )}
     </li>
   )
 }

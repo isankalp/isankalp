@@ -8,7 +8,14 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
 - **Goals** — group recurring task titles under a higher-level goal; progress rolls up total/done minutes across every matching task in history.
 - **Stats & Streaks** — minutes planned vs. done charted daily/weekly/monthly, current & longest streak, and a per-task-title breakdown.
 - **Calendar / History** — month view shaded by each day's percent of planned minutes completed; click a day to jump to its task list.
-- **Settings** — default landing view, light/dark theme, whether completed tasks move to a separate section or just get struck through in place, and JSON export/import for backup.
+- **Settings** — default landing view, light/dark theme, whether completed tasks move to a separate section or just get struck through in place, browser reminder notifications, and JSON export/import for backup.
+- **Habits** — a daily checklist pinned to the day view with per-habit current/longest streaks, computed from the habit's check-in history.
+- **Templates / Recurring Tasks** — save a task as a reusable template, one-tap add it to any day, or auto-generate it on chosen weekdays going forward (never duplicated per day).
+- **Priority** — tag tasks High/Medium/Low (defaults Medium), with day-view sort and filter.
+- **Notes** — a free-text note per task, with an indicator on the row and persisting through completion.
+- **Focus Timer** — a countdown for a task's `minutesPerSubtask`, prompting to mark a subtask complete when it ends.
+- **Weekly/Monthly Review** — an auto-populated summary (minutes, tasks completed, streak) per period, with an editable reflection note and a history list.
+- **Badges** — streak and cumulative-minutes milestones, auto-awarded once and shown in a view-only grid.
 
 ## Data model
 

@@ -11,7 +11,8 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null)
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const settings = useLiveQuery(() => db.settings.get('settings'), []) ?? DEFAULT_SETTINGS
+  const stored = useLiveQuery(() => db.settings.get('settings'), [])
+  const settings = { ...DEFAULT_SETTINGS, ...stored }
 
   useEffect(() => {
     db.settings.get('settings').then((existing) => {
@@ -24,8 +25,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [settings.theme])
 
   async function updateSettings(patch: Partial<Omit<Settings, 'id'>>) {
-    const current = (await db.settings.get('settings')) ?? DEFAULT_SETTINGS
-    await db.settings.put({ ...current, ...patch })
+    const current = await db.settings.get('settings')
+    await db.settings.put({ ...DEFAULT_SETTINGS, ...current, ...patch })
   }
 
   return (

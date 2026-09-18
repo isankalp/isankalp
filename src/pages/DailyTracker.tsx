@@ -1,10 +1,21 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import AddTaskForm from '../components/AddTaskForm'
 import DayNav from '../components/DayNav'
+import HabitWidget from '../components/HabitWidget'
 import TaskRow from '../components/TaskRow'
+import TemplatesPanel from '../components/TemplatesPanel'
 import { db } from '../db/db'
-import { dayMinutesDone, dayMinutesPlanned, dayPercentComplete, isTaskComplete } from '../db/models'
+import {
+  PRIORITIES,
+  dayMinutesDone,
+  dayMinutesPlanned,
+  dayPercentComplete,
+  isTaskComplete,
+  sortByPriority,
+  type Priority,
+} from '../db/models'
 import { useSettings } from '../context/SettingsContext'
 import { todayKey } from '../lib/date'
 
@@ -12,6 +23,9 @@ export default function DailyTracker() {
   const { date } = useParams<{ date: string }>()
   const activeDate = date ?? todayKey()
   const { settings } = useSettings()
+  const [sortPriority, setSortPriority] = useState(false)
+  const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
+  const [templatesOpen, setTemplatesOpen] = useState(false)
 
   const day = useLiveQuery(() => db.days.where('date').equals(activeDate).first(), [activeDate])
   const tasks = useLiveQuery(async () => {
@@ -20,10 +34,17 @@ export default function DailyTracker() {
   }, [day])
 
   const allTasks = tasks ?? []
-  const activeTasks = [...allTasks].filter((t) => !isTaskComplete(t)).sort((a, b) => a.createdAt - b.createdAt)
-  const completedTasks = [...allTasks]
-    .filter((t) => isTaskComplete(t))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+  const visibleTasks = priorityFilter === 'all' ? allTasks : allTasks.filter((t) => t.priority === priorityFilter)
+
+  let activeTasks = visibleTasks.filter((t) => !isTaskComplete(t))
+  let completedTasks = visibleTasks.filter((t) => isTaskComplete(t))
+  if (sortPriority) {
+    activeTasks = sortByPriority(activeTasks)
+    completedTasks = sortByPriority(completedTasks)
+  } else {
+    activeTasks = [...activeTasks].sort((a, b) => a.createdAt - b.createdAt)
+    completedTasks = [...completedTasks].sort((a, b) => b.updatedAt - a.updatedAt)
+  }
 
   const planned = dayMinutesPlanned(allTasks)
   const doneMin = dayMinutesDone(allTasks)
@@ -46,7 +67,40 @@ export default function DailyTracker() {
         </div>
       </div>
 
-      <AddTaskForm key={activeDate} defaultDate={activeDate} />
+      <HabitWidget date={activeDate} />
+
+      <AddTaskForm key={activeDate} defaultDate={activeDate} onToggleTemplates={() => setTemplatesOpen((v) => !v)} />
+
+      {templatesOpen && <TemplatesPanel date={activeDate} onClose={() => setTemplatesOpen(false)} />}
+
+      {allTasks.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 text-xs">
+          <button
+            type="button"
+            onClick={() => setSortPriority((v) => !v)}
+            className={
+              sortPriority
+                ? 'px-2.5 py-1 rounded-full bg-indigo-600 text-white font-medium'
+                : 'px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+            }
+          >
+            Sort by priority
+          </button>
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value as Priority | 'all')}
+            aria-label="Filter by priority"
+            className="px-2 py-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+          >
+            <option value="all">All priorities</option>
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p} only
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {allTasks.length === 0 ? (
         <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-8">
@@ -76,11 +130,12 @@ export default function DailyTracker() {
             </>
           ) : (
             <ul className="space-y-2">
-              {[...activeTasks, ...completedTasks]
-                .sort((a, b) => a.createdAt - b.createdAt)
-                .map((task) => (
-                  <TaskRow key={task.id} task={task} />
-                ))}
+              {(sortPriority
+                ? sortByPriority([...activeTasks, ...completedTasks])
+                : [...activeTasks, ...completedTasks].sort((a, b) => a.createdAt - b.createdAt)
+              ).map((task) => (
+                <TaskRow key={task.id} task={task} />
+              ))}
             </ul>
           )}
         </div>
