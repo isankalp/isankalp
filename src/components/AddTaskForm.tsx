@@ -38,7 +38,7 @@ export default function AddTaskForm({ defaultDate }: { defaultDate: string }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto_auto] gap-2 mb-6 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+      className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto_auto] gap-1.5 mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
     >
       <input
         type="text"
@@ -47,7 +47,7 @@ export default function AddTaskForm({ defaultDate }: { defaultDate: string }) {
         onChange={(e) => setTitle(e.target.value)}
         required
         maxLength={120}
-        className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm sm:col-span-1"
+        className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs sm:col-span-1"
       />
       <input
         type="number"
@@ -57,7 +57,7 @@ export default function AddTaskForm({ defaultDate }: { defaultDate: string }) {
         required
         min={1}
         step="any"
-        className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm w-32"
+        className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs w-28"
       />
       <input
         type="number"
@@ -67,18 +67,18 @@ export default function AddTaskForm({ defaultDate }: { defaultDate: string }) {
         required
         min={1}
         step={1}
-        className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm w-36"
+        className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs w-32"
       />
       <input
         type="date"
         value={day}
         onChange={(e) => setDay(e.target.value)}
         required
-        className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+        className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
       />
       <button
         type="submit"
-        className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+        className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"
       >
         Add Task
       </button>

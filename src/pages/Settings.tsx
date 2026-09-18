@@ -5,10 +5,10 @@ import type { CompletedBehavior, DefaultView, Theme } from '../db/models'
 
 function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-4 border-b border-slate-200 dark:border-slate-800 last:border-0">
+    <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-200 dark:border-slate-700 last:border-0">
       <div>
-        <p className="font-medium">{label}</p>
-        {hint && <p className="text-sm text-slate-500 dark:text-slate-400">{hint}</p>}
+        <p className="font-medium text-sm">{label}</p>
+        {hint && <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
       </div>
       {children}
     </div>
@@ -25,15 +25,15 @@ function SegmentedControl<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800">
+    <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-600 p-0.5 bg-slate-100 dark:bg-slate-700">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
             value === opt.value
-              ? 'bg-white dark:bg-slate-950 shadow text-indigo-600 dark:text-indigo-400'
+              ? 'bg-white dark:bg-slate-900 shadow text-indigo-600 dark:text-indigo-400'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
@@ -67,8 +67,8 @@ export default function Settings() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4">Settings</h2>
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4">
+      <h2 className="text-lg font-bold mb-3">Settings</h2>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
         <SettingRow label="Default view" hint="Which screen opens first when you launch the app.">
           <SegmentedControl<DefaultView>
             value={settings.defaultView}
@@ -106,7 +106,7 @@ export default function Settings() {
           <button
             type="button"
             onClick={handleExport}
-            className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+            className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700"
           >
             Export JSON
           </button>
@@ -128,14 +128,14 @@ export default function Settings() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700"
             >
               Import JSON
             </button>
           </>
         </SettingRow>
       </div>
-      {status && <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{status}</p>}
+      {status && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{status}</p>}
     </div>
   )
 }

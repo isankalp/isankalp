@@ -34,14 +34,14 @@ export default function DailyTracker() {
     <div>
       <DayNav date={activeDate} />
 
-      <div className="mb-6 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="flex items-center justify-between text-sm mb-2">
+      <div className="mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className="flex items-center justify-between text-xs mb-1.5">
           <span className="text-slate-500 dark:text-slate-400">Day progress</span>
           <span className="font-medium tabular-nums">
             {doneMin} / {planned} min ({dayPercent}%)
           </span>
         </div>
-        <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+        <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
           <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${dayPercent}%` }} />
         </div>
       </div>
@@ -49,24 +49,24 @@ export default function DailyTracker() {
       <AddTaskForm key={activeDate} defaultDate={activeDate} />
 
       {allTasks.length === 0 ? (
-        <p className="text-center text-slate-500 dark:text-slate-400 py-10">
+        <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-8">
           No tasks for this day yet. Add one above to get started.
         </p>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {moveCompleted ? (
             <>
-              <ul className="space-y-3">
+              <ul className="space-y-2">
                 {activeTasks.map((task) => (
                   <TaskRow key={task.id} task={task} />
                 ))}
               </ul>
               {completedTasks.length > 0 && (
                 <details open className="group">
-                  <summary className="cursor-pointer text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
                     Completed ({completedTasks.length})
                   </summary>
-                  <ul className="space-y-3">
+                  <ul className="space-y-2">
                     {completedTasks.map((task) => (
                       <TaskRow key={task.id} task={task} />
                     ))}
@@ -75,7 +75,7 @@ export default function DailyTracker() {
               )}
             </>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-2">
               {[...activeTasks, ...completedTasks]
                 .sort((a, b) => a.createdAt - b.createdAt)
                 .map((task) => (
