@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { db } from '../db/db'
+import { totalMinutes, type Task } from '../db/models'
 import { useSettings } from '../context/SettingsContext'
 import { fireCompletionWebhook } from '../lib/webhook'
-import type { Task } from '../db/models'
+import { enqueueWebhook } from '../lib/webhookQueue'
 
 /**
  * Rendered at the page level (not inside TaskRow) because a task reaching 100% often moves to the
@@ -16,7 +17,15 @@ export default function CompletionFollowUp({ task, onDone }: { task: Task; onDon
     if (!settings.webhookUrl) return
     fireCompletionWebhook(settings.webhookUrl, task)
       .then(() => setWebhookError(false))
-      .catch(() => setWebhookError(true))
+      .catch(() => {
+        setWebhookError(true)
+        // PU-5: also queued so it retries automatically once the app is back online, even if the user navigates away.
+        enqueueWebhook(settings.webhookUrl, {
+          title: task.title,
+          totalMinutes: totalMinutes(task),
+          completedAt: new Date().toISOString(),
+        })
+      })
   }
 
   // Intentionally scoped to task.id only — fires once for this specific completed task instance,

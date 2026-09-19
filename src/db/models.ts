@@ -38,8 +38,21 @@ export interface Task {
   category?: TaskCategory
   /** Google Calendar event id this task was last synced to, for update-in-place dedup (Epic 13). */
   googleEventId?: string
+  /** Values keyed by CustomFieldDef id (Epic 19). Kept even after the field def is deleted, unless erased explicitly. */
+  customFieldValues?: Record<string, string | number>
   createdAt: number
   updatedAt: number
+}
+
+export type CustomFieldType = 'text' | 'number' | 'dropdown'
+
+export interface CustomFieldDef {
+  id: string
+  name: string
+  type: CustomFieldType
+  /** Only for type 'dropdown'. */
+  options?: string[]
+  createdAt: number
 }
 
 export interface Day {
@@ -120,6 +133,23 @@ export interface VoiceNote {
   createdAt: number
 }
 
+/** A snapshot of a task's fields immediately before a mutation, for Epic 20's version history + restore. */
+export interface TaskHistoryEntry {
+  id: string
+  taskId: string
+  /** The fields that changed, with their PREVIOUS values. */
+  previousValues: Partial<Task>
+  at: number
+}
+
+/** A completion webhook call that failed while offline (or otherwise), retried automatically once back online (PU-5). */
+export interface WebhookQueueItem {
+  id: string
+  webhookUrl: string
+  payload: { title: string; totalMinutes: number; completedAt: string }
+  createdAt: number
+}
+
 export type DefaultView = 'today' | 'week'
 export type Theme = 'light' | 'dark'
 export type CompletedBehavior = 'move' | 'in-place'
@@ -134,6 +164,14 @@ export interface Settings {
   eveningNudgeTime: string // "HH:MM", 24h local time
   webhookUrl: string
   googleCalendarConnected: boolean
+  /** Domains the user wants blocked during a Focus Timer session (Epic 17). Stored only — enforcement needs a
+   *  companion browser extension that isn't part of this app, so the list has no runtime effect on its own. */
+  focusBlocklist: string[]
+  highContrast: boolean
+  autoBackupEnabled: boolean
+  autoBackupIntervalDays: number
+  lastAutoBackupAt?: number
+  lastAutoBackupFailedAt?: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -146,6 +184,10 @@ export const DEFAULT_SETTINGS: Settings = {
   eveningNudgeTime: '19:00',
   webhookUrl: '',
   googleCalendarConnected: false,
+  focusBlocklist: [],
+  highContrast: false,
+  autoBackupEnabled: false,
+  autoBackupIntervalDays: 1,
 }
 
 /** Clamp completedSubtasks into [0, totalSubtasks], rounding to whole units. */

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Task } from '../db/models'
+import { AMBIENT_SOUND_OPTIONS, playAmbientSound, stopAmbientSound, type AmbientSoundType } from '../lib/ambientSound'
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60)
@@ -21,10 +22,21 @@ export default function FocusTimer({
   const [paused, setPaused] = useState(false)
   const done = remaining <= 0
   const startedAt = useRef(0)
+  const [ambientSound, setAmbientSound] = useState<AmbientSoundType>('none')
+  const [muted, setMuted] = useState(false)
 
   useEffect(() => {
     startedAt.current = Date.now()
+    return () => stopAmbientSound()
   }, [])
+
+  useEffect(() => {
+    if (done || muted || ambientSound === 'none') {
+      stopAmbientSound()
+    } else {
+      playAmbientSound(ambientSound)
+    }
+  }, [ambientSound, muted, done])
 
   useEffect(() => {
     if (paused || done) return
@@ -77,6 +89,32 @@ export default function FocusTimer({
         >
           Cancel
         </button>
+      </div>
+      <div className="flex items-center justify-center gap-1.5 mt-2 text-[11px]">
+        <span className="text-indigo-600 dark:text-indigo-400">Ambient:</span>
+        <select
+          value={ambientSound}
+          onChange={(e) => setAmbientSound(e.target.value as AmbientSoundType)}
+          aria-label="Ambient sound"
+          className="px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-slate-800"
+        >
+          {AMBIENT_SOUND_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {ambientSound !== 'none' && (
+          <button
+            type="button"
+            onClick={() => setMuted((m) => !m)}
+            aria-pressed={muted}
+            aria-label={muted ? 'Unmute ambient sound' : 'Mute ambient sound'}
+            className="px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-500/20"
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
+        )}
       </div>
     </div>
   )

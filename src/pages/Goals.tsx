@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState, type FormEvent, type KeyboardEvent } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db } from '../db/db'
+import TemplateLibrary from '../components/TemplateLibrary'
 import { minutesDone as taskMinutesDone, totalMinutes as taskTotalMinutes, type Goal } from '../db/models'
 
 function blurOnEnter(e: KeyboardEvent<HTMLInputElement>) {
@@ -129,6 +130,7 @@ export default function Goals() {
   const [targetDate, setTargetDate] = useState('')
   const [selectedTitles, setSelectedTitles] = useState<string[]>([])
   const [tab, setTab] = useState<'active' | 'archived'>('active')
+  const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false)
 
   const goals = allGoals.filter((g) => (tab === 'active' ? !g.archivedAt : !!g.archivedAt))
 
@@ -153,23 +155,34 @@ export default function Goals() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h2 className="text-lg font-bold">Goals</h2>
-        <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-600 p-0.5 bg-slate-100 dark:bg-slate-700">
-          {(['active', 'archived'] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`px-2.5 py-1 rounded text-xs font-medium capitalize ${
-                tab === t ? 'bg-white dark:bg-slate-900 shadow text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTemplateLibraryOpen(true)}
+            className="text-xs px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+          >
+            New Goal from Template
+          </button>
+          <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-600 p-0.5 bg-slate-100 dark:bg-slate-700">
+            {(['active', 'archived'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={`px-2.5 py-1 rounded text-xs font-medium capitalize ${
+                  tab === t ? 'bg-white dark:bg-slate-900 shadow text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {templateLibraryOpen && <TemplateLibrary onClose={() => setTemplateLibraryOpen(false)} />}
 
       {tab === 'active' && (
         <form

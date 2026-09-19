@@ -24,6 +24,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
   }, [settings.theme])
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('high-contrast', settings.highContrast)
+  }, [settings.highContrast])
+
   async function updateSettings(patch: Partial<Omit<Settings, 'id'>>) {
     const current = await db.settings.get('settings')
     await db.settings.put({ ...DEFAULT_SETTINGS, ...current, ...patch })

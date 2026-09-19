@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   type Badge,
   type CompletionEvent,
+  type CustomFieldDef,
   type Day,
   type Goal,
   type Habit,
@@ -12,8 +13,10 @@ import {
   type Review,
   type Settings,
   type Task,
+  type TaskHistoryEntry,
   type Template,
   type VoiceNote,
+  type WebhookQueueItem,
 } from './models'
 
 export class GoalsDB extends Dexie {
@@ -28,6 +31,9 @@ export class GoalsDB extends Dexie {
   badges!: Table<Badge, string>
   completionEvents!: Table<CompletionEvent, string>
   voiceNotes!: Table<VoiceNote, string>
+  customFields!: Table<CustomFieldDef, string>
+  taskHistory!: Table<TaskHistoryEntry, string>
+  webhookQueue!: Table<WebhookQueueItem, string>
 
   constructor(name: string) {
     super(name)
@@ -70,6 +76,22 @@ export class GoalsDB extends Dexie {
       completionEvents: 'id, taskId, at',
       voiceNotes: 'id, taskId, createdAt',
     })
+    this.version(4).stores({
+      tasks: 'id, dayId, title, createdAt, templateId, dependsOnTaskId',
+      days: 'id, &date',
+      goals: 'id, title, archivedAt',
+      settings: 'id',
+      habits: 'id, archivedAt',
+      habitLogs: 'id, habitId, date, &[habitId+date]',
+      templates: 'id, archivedAt',
+      reviews: 'id, periodType, periodKey',
+      badges: 'id, type',
+      completionEvents: 'id, taskId, at',
+      voiceNotes: 'id, taskId, createdAt',
+      customFields: 'id, name',
+      taskHistory: 'id, taskId, at',
+      webhookQueue: 'id, createdAt',
+    })
   }
 }
 
@@ -102,4 +124,12 @@ export async function getSettings(): Promise<Settings> {
 export async function logCompletionEvent(taskId: string, delta: number): Promise<void> {
   if (delta === 0) return
   await db.completionEvents.add({ id: uuid(), taskId, delta, at: Date.now() })
+}
+
+/** Applies a task patch while recording the previous values of the changed fields, for Epic 20's history/restore. */
+export async function updateTaskTracked(task: Task, patch: Partial<Task>): Promise<void> {
+  const changedKeys = Object.keys(patch) as (keyof Task)[]
+  const previousValues = Object.fromEntries(changedKeys.map((key) => [key, task[key]])) as Partial<Task>
+  await db.tasks.update(task.id, patch)
+  await db.taskHistory.add({ id: uuid(), taskId: task.id, previousValues, at: Date.now() })
 }

@@ -2,7 +2,9 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { todayKey } from '../lib/date'
 import clsx from 'clsx'
 import BadgeToast from './BadgeToast'
+import KeyboardShortcuts from './KeyboardShortcuts'
 import ProfileSwitcher from './ProfileSwitcher'
+import UndoBanner from './UndoBanner'
 
 const links = [
   { to: `/day/${todayKey()}`, label: 'Today', match: '/day' },
@@ -48,6 +50,8 @@ export default function Layout() {
         <Outlet />
       </main>
       <BadgeToast />
+      <UndoBanner />
+      <KeyboardShortcuts />
     </div>
   )
 }

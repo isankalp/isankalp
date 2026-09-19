@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { useState, type KeyboardEvent } from 'react'
-import { db, logCompletionEvent } from '../db/db'
+import { db, logCompletionEvent, updateTaskTracked } from '../db/db'
+import { pushUndo } from '../lib/undoStack'
 import {
   PRIORITIES,
   clampCompleted,
@@ -14,6 +15,8 @@ import {
 } from '../db/models'
 import FocusTimer from './FocusTimer'
 import NamedSubtasks from './NamedSubtasks'
+import TaskCustomFields from './TaskCustomFields'
+import TaskHistoryPanel from './TaskHistoryPanel'
 import VoiceNoteRecorder from './VoiceNoteRecorder'
 
 function blurOnEnter(e: KeyboardEvent<HTMLInputElement>) {
@@ -46,11 +49,24 @@ export default function TaskRow({
   const [focusOpen, setFocusOpen] = useState(false)
   const [subtasksOpen, setSubtasksOpen] = useState(false)
   const [categoryOpen, setCategoryOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   const tasksById = new Map(dayTasks.map((t) => [t.id, t]))
   const locked = isTaskLocked(task, tasksById)
   const dependencyOptions = dayTasks.filter((t) => t.id !== task.id)
   const dependency = task.dependsOnTaskId ? tasksById.get(task.dependsOnTaskId) : undefined
+
+  /** Applies a patch with history + undo tracking in one place, so every field edit is both restorable and undoable. */
+  async function commitField(patch: Partial<Task>, description: string) {
+    const previousValues = Object.fromEntries(Object.keys(patch).map((k) => [k, task[k as keyof Task]])) as Partial<Task>
+    await updateTaskTracked(task, patch)
+    pushUndo({
+      description,
+      undo: async () => {
+        await db.tasks.update(task.id, previousValues)
+      },
+    })
+  }
 
   async function commitCompleted(value: number, actualMinutes?: number) {
     const clamped = clampCompleted(value, task.totalSubtasks)
@@ -60,7 +76,7 @@ export default function TaskRow({
     if (actualMinutes !== undefined) {
       patch.actualMinutes = (task.actualMinutes ?? 0) + actualMinutes
     }
-    await db.tasks.update(task.id, patch)
+    await commitField(patch, `Update "${task.title}" progress`)
     await logCompletionEvent(task.id, clamped - task.completedSubtasks)
     const nowComplete = clamped === task.totalSubtasks && task.totalSubtasks > 0
     if (!wasComplete && nowComplete) {
@@ -71,61 +87,64 @@ export default function TaskRow({
   async function commitTitle(value: string) {
     const title = value.trim()
     if (!title || title === task.title) return
-    await db.tasks.update(task.id, { title, updatedAt: Date.now() })
+    await commitField({ title, updatedAt: Date.now() }, `Rename "${task.title}"`)
   }
 
   async function commitMinutesPerSubtask(value: string) {
     const n = Number(value)
     if (!Number.isFinite(n) || n <= 0 || n === task.minutesPerSubtask) return
-    await db.tasks.update(task.id, { minutesPerSubtask: n, updatedAt: Date.now() })
+    await commitField({ minutesPerSubtask: n, updatedAt: Date.now() }, `Change minutes/subtask on "${task.title}"`)
   }
 
   async function commitTotalSubtasks(value: string) {
     const n = Math.max(1, Math.floor(Number(value)) || 1)
     if (n === task.totalSubtasks) return
-    await db.tasks.update(task.id, {
-      totalSubtasks: n,
-      completedSubtasks: clampCompleted(task.completedSubtasks, n),
-      updatedAt: Date.now(),
-    })
+    await commitField(
+      { totalSubtasks: n, completedSubtasks: clampCompleted(task.completedSubtasks, n), updatedAt: Date.now() },
+      `Change total subtasks on "${task.title}"`,
+    )
   }
 
   async function commitPriority(priority: Priority) {
-    await db.tasks.update(task.id, { priority, updatedAt: Date.now() })
+    await commitField({ priority }, `Change priority on "${task.title}"`)
   }
 
   async function commitNotes(value: string) {
-    await db.tasks.update(task.id, { notes: value, updatedAt: Date.now() })
+    await commitField({ notes: value }, `Edit note on "${task.title}"`)
   }
 
   async function commitDependsOn(value: string) {
-    await db.tasks.update(task.id, { dependsOnTaskId: value || undefined, updatedAt: Date.now() })
+    await commitField({ dependsOnTaskId: value || undefined, updatedAt: Date.now() }, `Change dependency on "${task.title}"`)
   }
 
   async function toggleNamedSubtasks() {
     if (task.subtaskItems) {
-      await db.tasks.update(task.id, { subtaskItems: undefined, updatedAt: Date.now() })
+      await commitField({ subtaskItems: undefined, updatedAt: Date.now() }, `Turn off named subtasks on "${task.title}"`)
     } else {
       const items = Array.from({ length: task.totalSubtasks }, (_, i) => ({
         id: `${task.id}-${i}`,
         title: `Subtask ${i + 1}`,
         completed: i < task.completedSubtasks,
       }))
-      await db.tasks.update(task.id, { subtaskItems: items, updatedAt: Date.now() })
+      await commitField({ subtaskItems: items, updatedAt: Date.now() }, `Turn on named subtasks on "${task.title}"`)
     }
   }
 
   async function commitCategory(label: string, color: string, icon: string) {
-    if (!label.trim()) {
-      await db.tasks.update(task.id, { category: undefined })
-    } else {
-      await db.tasks.update(task.id, { category: { label: label.trim(), color, icon: icon.trim() || '🏷️' } })
-    }
+    const category = label.trim() ? { label: label.trim(), color, icon: icon.trim() || '🏷️' } : undefined
+    await commitField({ category }, `Change category on "${task.title}"`)
     setCategoryOpen(false)
   }
 
   async function deleteTask() {
+    const snapshot = { ...task }
     await db.tasks.delete(task.id)
+    pushUndo({
+      description: `Delete "${task.title}"`,
+      undo: async () => {
+        await db.tasks.add(snapshot)
+      },
+    })
   }
 
   const fieldClass =
@@ -133,8 +152,12 @@ export default function TaskRow({
 
   return (
     <li
+      data-task-row
+      tabIndex={0}
+      aria-label={`${task.title}, ${percent} percent complete, ${task.completedSubtasks} of ${task.totalSubtasks} subtasks${complete ? ', complete' : ''}${locked ? ', locked' : ''}`}
       className={clsx(
         'p-3 rounded-lg border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 transition-opacity',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
         complete && 'opacity-60',
         locked && 'opacity-70',
       )}
@@ -244,11 +267,29 @@ export default function TaskRow({
           >
             📝
           </button>
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((v) => !v)}
+            aria-label="Toggle task details"
+            className="text-xs text-slate-300 dark:text-slate-600 hover:text-slate-500"
+          >
+            ⓘ
+          </button>
           <button type="button" onClick={deleteTask} aria-label={`Delete ${task.title}`} className="text-slate-400 hover:text-red-600 text-xs">
             ✕
           </button>
         </div>
       </div>
+
+      {detailsOpen && (
+        <div className="space-y-2">
+          <TaskCustomFields task={task} />
+          <details className="mt-1">
+            <summary className="cursor-pointer text-[11px] text-slate-500 dark:text-slate-400">History</summary>
+            <TaskHistoryPanel task={task} />
+          </details>
+        </div>
+      )}
 
       {categoryOpen && (
         <CategoryEditor
@@ -303,13 +344,23 @@ export default function TaskRow({
       <VoiceNoteRecorder taskId={task.id} />
 
       <div className="flex items-center gap-2 mt-2">
-        <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+        <div
+          role="progressbar"
+          aria-valuenow={percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${task.title} progress`}
+          className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"
+        >
           <div
             className={clsx('h-full rounded-full transition-all', complete ? 'bg-emerald-500' : 'bg-indigo-500')}
             style={{ width: `${percent}%` }}
           />
         </div>
-        <span className="text-xs font-medium tabular-nums w-9 text-right">{percent}%</span>
+        <span className="text-xs font-medium tabular-nums w-9 text-right">
+          {complete && <span aria-hidden="true">✓ </span>}
+          {percent}%
+        </span>
       </div>
 
       {!task.subtaskItems && (
@@ -332,7 +383,7 @@ export default function TaskRow({
             onChange={(e) => commitCompleted(Number(e.target.value))}
             onBlur={(e) => commitCompleted(Number(e.target.value))}
             className="w-14 text-center px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs tabular-nums disabled:opacity-50"
-            aria-label={`Completed subtasks for ${task.title}`}
+            aria-label={`Completed subtasks, ${task.completedSubtasks} of ${task.totalSubtasks}, ${percent} percent`}
           />
           <button
             type="button"

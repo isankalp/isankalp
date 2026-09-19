@@ -1,10 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import AddTaskForm from '../components/AddTaskForm'
+import AddTaskForm, { type AddTaskPrefill } from '../components/AddTaskForm'
 import CompletionFollowUp from '../components/CompletionFollowUp'
 import DayNav from '../components/DayNav'
 import HabitWidget from '../components/HabitWidget'
+import ImportCsvModal from '../components/ImportCsvModal'
+import QuickAddBar from '../components/QuickAddBar'
 import RolloverPrompt from '../components/RolloverPrompt'
 import TaskRow from '../components/TaskRow'
 import TemplatesPanel from '../components/TemplatesPanel'
@@ -33,6 +35,9 @@ export default function DailyTracker() {
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [planBannerDismissed, setPlanBannerDismissed] = useState(false)
   const [justCompleted, setJustCompleted] = useState<Task | null>(null)
+  const [prefill, setPrefill] = useState<AddTaskPrefill | undefined>(undefined)
+  const [prefillNonce, setPrefillNonce] = useState(0)
+  const [importOpen, setImportOpen] = useState(false)
 
   const day = useLiveQuery(() => db.days.where('date').equals(activeDate).first(), [activeDate])
   const tasks = useLiveQuery(async () => {
@@ -65,6 +70,14 @@ export default function DailyTracker() {
   return (
     <div>
       <DayNav date={activeDate} />
+
+      <QuickAddBar
+        date={activeDate}
+        onManualFallback={(recognized) => {
+          setPrefill(recognized)
+          setPrefillNonce((n) => n + 1)
+        }}
+      />
 
       {showPlanBanner && (
         <div className="mb-4 p-2.5 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-500/10 text-xs flex items-center justify-between gap-2">
@@ -103,7 +116,14 @@ export default function DailyTracker() {
             {doneMin} / {planned} min ({dayPercent}%)
           </span>
         </div>
-        <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+        <div
+          role="progressbar"
+          aria-valuenow={dayPercent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Day progress"
+          className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"
+        >
           <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${dayPercent}%` }} />
         </div>
       </div>
@@ -112,9 +132,24 @@ export default function DailyTracker() {
 
       <HabitWidget date={activeDate} />
 
-      <AddTaskForm key={activeDate} defaultDate={activeDate} onToggleTemplates={() => setTemplatesOpen((v) => !v)} />
+      <AddTaskForm
+        key={`${activeDate}-${prefillNonce}`}
+        defaultDate={activeDate}
+        onToggleTemplates={() => setTemplatesOpen((v) => !v)}
+        prefill={prefillNonce > 0 ? prefill : undefined}
+      />
 
       {templatesOpen && <TemplatesPanel date={activeDate} onClose={() => setTemplatesOpen(false)} />}
+
+      <button
+        type="button"
+        onClick={() => setImportOpen(true)}
+        className="mb-3 text-[11px] px-2 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+      >
+        ⬆ Import CSV
+      </button>
+
+      {importOpen && <ImportCsvModal defaultDate={activeDate} onClose={() => setImportOpen(false)} />}
 
       {allTasks.length > 0 && (
         <div className="flex items-center gap-2 mb-3 text-xs">

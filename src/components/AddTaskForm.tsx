@@ -1,22 +1,37 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db, getOrCreateDay } from '../db/db'
 import { PRIORITIES, type Priority } from '../db/models'
 
+export interface AddTaskPrefill {
+  title: string
+  minutesPerSubtask?: number
+  totalSubtasks?: number
+}
+
 export default function AddTaskForm({
   defaultDate,
   onToggleTemplates,
+  prefill,
 }: {
   defaultDate: string
   onToggleTemplates?: () => void
+  /** Pre-fills the form, e.g. from a Quick-Add parse that couldn't be fully resolved (QA-2). */
+  prefill?: AddTaskPrefill
 }) {
-  const [title, setTitle] = useState('')
-  const [minutesPerSubtask, setMinutesPerSubtask] = useState('')
-  const [totalSubtasks, setTotalSubtasks] = useState('')
+  const [title, setTitle] = useState(prefill?.title ?? '')
+  const [minutesPerSubtask, setMinutesPerSubtask] = useState(prefill?.minutesPerSubtask?.toString() ?? '')
+  const [totalSubtasks, setTotalSubtasks] = useState(prefill?.totalSubtasks?.toString() ?? '')
   const [priority, setPriority] = useState<Priority>('Medium')
   const [day, setDay] = useState(defaultDate)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(prefill ? "Couldn't parse that — fill in manually" : null)
   const [suggested, setSuggested] = useState(false)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (prefill) titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount for this prefill instance
+  }, [])
 
   async function handleMinutesFocus() {
     if (minutesPerSubtask.trim() || !title.trim()) return
@@ -90,6 +105,7 @@ export default function AddTaskForm({
     >
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto_auto] gap-1.5">
         <input
+          ref={titleInputRef}
           type="text"
           placeholder="Task title (e.g. Solve DSA questions)"
           value={title}

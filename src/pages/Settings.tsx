@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { db } from '../db/db'
+import ImportCsvModal from '../components/ImportCsvModal'
+import CustomFieldsSettings from '../components/CustomFieldsSettings'
 import { useSettings } from '../context/SettingsContext'
 import { downloadExport, exportData, importData } from '../lib/exportImport'
 import { notificationPermission, notificationSupported, requestNotificationPermission } from '../lib/reminders'
@@ -61,6 +63,8 @@ export default function Settings() {
   const { settings, updateSettings } = useSettings()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [csvImportOpen, setCsvImportOpen] = useState(false)
+  const [blocklistInput, setBlocklistInput] = useState('')
   const [permission, setPermission] = useState(notificationPermission())
 
   const [calendarConnected, setCalendarConnected] = useState(hasCalendarToken())
@@ -117,6 +121,16 @@ export default function Settings() {
     } catch (err) {
       setStatus(err instanceof Error ? `Import failed: ${err.message}` : 'Import failed.')
     }
+  }
+
+  function handleAddBlocklistDomain() {
+    const domain = blocklistInput.trim().toLowerCase()
+    if (!domain || settings.focusBlocklist.includes(domain)) {
+      setBlocklistInput('')
+      return
+    }
+    updateSettings({ focusBlocklist: [...settings.focusBlocklist, domain] })
+    setBlocklistInput('')
   }
 
   async function handleConnectCalendar() {
@@ -199,6 +213,19 @@ export default function Settings() {
               { value: 'dark', label: 'Dark' },
             ]}
           />
+        </SettingRow>
+
+        <SettingRow label="High-Contrast" hint="Strengthens muted text and borders to meet WCAG AA contrast.">
+          <button
+            type="button"
+            onClick={() => updateSettings({ highContrast: !settings.highContrast })}
+            aria-pressed={settings.highContrast}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+              settings.highContrast ? 'bg-indigo-600 text-white' : 'border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            {settings.highContrast ? 'Enabled' : 'Enable'}
+          </button>
         </SettingRow>
 
         <SettingRow label="Completed tasks" hint="Move finished tasks to a separate section, or leave them in place.">
@@ -289,8 +316,104 @@ export default function Settings() {
             </button>
           </>
         </SettingRow>
+
+        <SettingRow label="Import CSV" hint="Bulk-create tasks for a chosen day from a title/minutesPerSubtask/totalSubtasks spreadsheet.">
+          <button
+            type="button"
+            onClick={() => setCsvImportOpen(true)}
+            className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700"
+          >
+            Import CSV
+          </button>
+        </SettingRow>
+
+        <SettingRow
+          label="Automated backup"
+          hint={
+            settings.autoBackupEnabled && settings.lastAutoBackupAt
+              ? `Last backup: ${new Date(settings.lastAutoBackupAt).toLocaleString()}`
+              : 'Automatically downloads a full export on the interval below.'
+          }
+        >
+          <div className="flex items-center gap-1.5">
+            {settings.autoBackupEnabled && (
+              <select
+                value={settings.autoBackupIntervalDays}
+                onChange={(e) => updateSettings({ autoBackupIntervalDays: Number(e.target.value) })}
+                className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+              >
+                <option value={1}>Daily</option>
+                <option value={7}>Weekly</option>
+              </select>
+            )}
+            <button
+              type="button"
+              onClick={() => updateSettings({ autoBackupEnabled: !settings.autoBackupEnabled })}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                settings.autoBackupEnabled ? 'bg-indigo-600 text-white' : 'border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              {settings.autoBackupEnabled ? 'Enabled' : 'Enable'}
+            </button>
+          </div>
+        </SettingRow>
+        {settings.autoBackupEnabled && settings.lastAutoBackupFailedAt && (settings.lastAutoBackupFailedAt > (settings.lastAutoBackupAt ?? 0)) && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 pb-2">
+            ⚠ The last automated backup failed ({new Date(settings.lastAutoBackupFailedAt).toLocaleString()}) — backups may not be running.
+          </p>
+        )}
       </div>
+      {csvImportOpen && <ImportCsvModal defaultDate={todayKey()} onClose={() => setCsvImportOpen(false)} />}
       {status && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{status}</p>}
+
+      <h2 className="text-lg font-bold mt-6 mb-3">Focus</h2>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-3">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+          Domains to avoid during a Focus Timer session. This list is saved for reference only — blocking a site
+          while you're focused requires a browser extension, which isn't part of this app yet.
+        </p>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {settings.focusBlocklist.length === 0 && <span className="text-xs text-slate-400">No domains added yet.</span>}
+          {settings.focusBlocklist.map((domain) => (
+            <span
+              key={domain}
+              className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center gap-1"
+            >
+              {domain}
+              <button
+                type="button"
+                onClick={() => updateSettings({ focusBlocklist: settings.focusBlocklist.filter((d) => d !== domain) })}
+                aria-label={`Remove ${domain} from blocklist`}
+                className="text-slate-400 hover:text-red-600"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={blocklistInput}
+            onChange={(e) => setBlocklistInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                handleAddBlocklistDomain()
+              }
+            }}
+            placeholder="e.g. twitter.com"
+            className="flex-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+          />
+          <button
+            type="button"
+            onClick={handleAddBlocklistDomain}
+            className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700"
+          >
+            Add
+          </button>
+        </div>
+      </div>
 
       <h2 className="text-lg font-bold mt-6 mb-3">Integrations</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
@@ -404,6 +527,9 @@ export default function Settings() {
         </div>
         {profileError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{profileError}</p>}
       </div>
+
+      <h2 className="text-lg font-bold mt-6 mb-3">Custom Fields</h2>
+      <CustomFieldsSettings />
     </div>
   )
 }

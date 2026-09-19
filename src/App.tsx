@@ -1,6 +1,7 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import OnboardingWizard from './components/OnboardingWizard'
 import DailyTracker from './pages/DailyTracker'
 import Goals from './pages/Goals'
 import Settings from './pages/Settings'
@@ -9,6 +10,9 @@ import { useSettings } from './context/SettingsContext'
 import { ensureRecurringTasksGenerated } from './lib/recurrence'
 import { checkAndAwardBadges } from './lib/badges'
 import { checkReminders } from './lib/reminders'
+import { hasOnboarded } from './lib/onboarding'
+import { checkAutoBackup } from './lib/autoBackup'
+import { flushWebhookQueue } from './lib/webhookQueue'
 
 const Stats = lazy(() => import('./pages/Stats'))
 const Calendar = lazy(() => import('./pages/Calendar'))
@@ -24,6 +28,7 @@ function Root() {
 
 export default function App() {
   const { settings } = useSettings()
+  const [showOnboarding, setShowOnboarding] = useState(() => !hasOnboarded())
 
   useEffect(() => {
     ensureRecurringTasksGenerated()
@@ -36,8 +41,22 @@ export default function App() {
     return () => clearInterval(id)
   }, [settings])
 
+  useEffect(() => {
+    checkAutoBackup(settings)
+    const id = setInterval(() => checkAutoBackup(settings), 60 * 60_000)
+    return () => clearInterval(id)
+  }, [settings])
+
+  useEffect(() => {
+    flushWebhookQueue()
+    window.addEventListener('online', flushWebhookQueue)
+    return () => window.removeEventListener('online', flushWebhookQueue)
+  }, [])
+
   return (
-    <Routes>
+    <>
+      {showOnboarding && <OnboardingWizard onFinish={() => setShowOnboarding(false)} />}
+      <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Root />} />
         <Route path="/day/:date" element={<DailyTracker />} />
@@ -93,6 +112,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Root />} />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   )
 }

@@ -15,3 +15,17 @@ body {
 #root {
   min-height: 100svh;
 }
+
+/* AC-3: High-Contrast mode. Tailwind v4 utilities read color from these CSS variables at use time, so
+   redefining them here raises contrast everywhere those utilities are used, without touching components. */
+.high-contrast:not(.dark) {
+  --color-slate-300: oklch(60% 0.02 255);
+  --color-slate-400: oklch(38% 0.03 257);
+  --color-slate-500: oklch(25% 0.04 257);
+}
+
+.high-contrast.dark {
+  --color-slate-300: oklch(92% 0.01 255);
+  --color-slate-400: oklch(88% 0.015 256);
+  --color-slate-500: oklch(80% 0.02 257);
+}

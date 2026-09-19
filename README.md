@@ -24,6 +24,15 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
 - **Voice notes** — record and play back an audio note per task.
 - **Integrations** — optional Google Calendar sync (OAuth, needs your own client ID) and a completion webhook, both with visible failure/retry.
 - **Multi-profile** — fully separate datasets (own IndexedDB database) switchable from a header dropdown; goals can be archived without losing history; tasks can carry a color/icon category.
+- **Quick-Add** — type or speak a line like "50 pages reading, 1 min each" to create a task instantly; unparseable input always falls back to the manual form pre-filled with whatever was recognized, and nothing saves until confirmed.
+- **CSV Import** — bulk-create tasks from a spreadsheet with column mapping and a live preview; invalid rows are skipped individually and listed, nothing writes until you click Import.
+- **Onboarding & Goal Templates** — a skippable first-run wizard that creates one goal and task while explaining the model, plus a searchable template library for common goals.
+- **Custom Fields** — define extra text/number/dropdown fields for tasks, shown only in the task's detail panel; deleting a field keeps existing values unless you explicitly erase them.
+- **Undo & History** — undo the last change (button or Ctrl/Cmd+Z), and reopen any task's edit history to restore a past version.
+- **Automated backups** — an optional scheduled full export, with a visible warning in Settings if a backup run fails.
+- **Keyboard shortcuts** — N to add a task, arrow keys to move between rows, Enter to increment, and `?` for a full shortcut reference.
+- **Installable & offline** — installs as a PWA and keeps viewing/editing tasks fully working with no network connection.
+- **Accessibility** — full keyboard operability, screen-reader labels on progress/completion controls, a High-Contrast mode, and no state conveyed by color alone.
 
 ## Data model
 
