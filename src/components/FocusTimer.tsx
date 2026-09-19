@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Task } from '../db/models'
 
 function formatTime(totalSeconds: number): string {
@@ -7,11 +7,24 @@ function formatTime(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export default function FocusTimer({ task, onClose, onComplete }: { task: Task; onClose: () => void; onComplete: () => void }) {
+export default function FocusTimer({
+  task,
+  onClose,
+  onComplete,
+}: {
+  task: Task
+  onClose: () => void
+  onComplete: (actualMinutes: number) => void
+}) {
   const totalSeconds = Math.round(task.minutesPerSubtask * 60)
   const [remaining, setRemaining] = useState(totalSeconds)
   const [paused, setPaused] = useState(false)
   const done = remaining <= 0
+  const startedAt = useRef(0)
+
+  useEffect(() => {
+    startedAt.current = Date.now()
+  }, [])
 
   useEffect(() => {
     if (paused || done) return
@@ -27,7 +40,7 @@ export default function FocusTimer({ task, onClose, onComplete }: { task: Task; 
           <button
             type="button"
             onClick={() => {
-              onComplete()
+              onComplete((Date.now() - startedAt.current) / 60000)
               onClose()
             }}
             className="px-3 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"

@@ -1,9 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import AddTaskForm from '../components/AddTaskForm'
+import CompletionFollowUp from '../components/CompletionFollowUp'
 import DayNav from '../components/DayNav'
 import HabitWidget from '../components/HabitWidget'
+import RolloverPrompt from '../components/RolloverPrompt'
 import TaskRow from '../components/TaskRow'
 import TemplatesPanel from '../components/TemplatesPanel'
 import { db } from '../db/db'
@@ -15,9 +17,12 @@ import {
   isTaskComplete,
   sortByPriority,
   type Priority,
+  type Task,
 } from '../db/models'
 import { useSettings } from '../context/SettingsContext'
 import { todayKey } from '../lib/date'
+import { weekStart } from '../lib/aggregate'
+import { markWeeklyPlanPrompted, shouldPromptWeeklyPlan } from '../lib/planningWizard'
 
 export default function DailyTracker() {
   const { date } = useParams<{ date: string }>()
@@ -26,6 +31,8 @@ export default function DailyTracker() {
   const [sortPriority, setSortPriority] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [planBannerDismissed, setPlanBannerDismissed] = useState(false)
+  const [justCompleted, setJustCompleted] = useState<Task | null>(null)
 
   const day = useLiveQuery(() => db.days.where('date').equals(activeDate).first(), [activeDate])
   const tasks = useLiveQuery(async () => {
@@ -51,9 +58,43 @@ export default function DailyTracker() {
   const dayPercent = dayPercentComplete(allTasks)
   const moveCompleted = settings.completedBehavior === 'move'
 
+  const isTodayView = activeDate === todayKey()
+  const currentWeek = weekStart(todayKey())
+  const showPlanBanner = isTodayView && !planBannerDismissed && shouldPromptWeeklyPlan(currentWeek)
+
   return (
     <div>
       <DayNav date={activeDate} />
+
+      {showPlanBanner && (
+        <div className="mb-4 p-2.5 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-500/10 text-xs flex items-center justify-between gap-2">
+          <span>It's a new week — want a task plan suggested from your goals?</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              to="/plan"
+              onClick={() => {
+                markWeeklyPlanPrompted(currentWeek)
+                setPlanBannerDismissed(true)
+              }}
+              className="px-2.5 py-1 rounded-md bg-indigo-600 text-white font-semibold"
+            >
+              Plan Week
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                markWeeklyPlanPrompted(currentWeek)
+                setPlanBannerDismissed(true)
+              }}
+              className="text-slate-500 dark:text-slate-400 underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isTodayView && <RolloverPrompt date={activeDate} />}
 
       <div className="mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
         <div className="flex items-center justify-between text-xs mb-1.5">
@@ -66,6 +107,8 @@ export default function DailyTracker() {
           <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${dayPercent}%` }} />
         </div>
       </div>
+
+      {justCompleted && <CompletionFollowUp task={justCompleted} onDone={() => setJustCompleted(null)} />}
 
       <HabitWidget date={activeDate} />
 
@@ -112,7 +155,7 @@ export default function DailyTracker() {
             <>
               <ul className="space-y-2">
                 {activeTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} />
+                  <TaskRow key={task.id} task={task} dayTasks={allTasks} onJustCompleted={setJustCompleted} />
                 ))}
               </ul>
               {completedTasks.length > 0 && (
@@ -122,7 +165,7 @@ export default function DailyTracker() {
                   </summary>
                   <ul className="space-y-2">
                     {completedTasks.map((task) => (
-                      <TaskRow key={task.id} task={task} />
+                      <TaskRow key={task.id} task={task} dayTasks={allTasks} onJustCompleted={setJustCompleted} />
                     ))}
                   </ul>
                 </details>
@@ -134,7 +177,7 @@ export default function DailyTracker() {
                 ? sortByPriority([...activeTasks, ...completedTasks])
                 : [...activeTasks, ...completedTasks].sort((a, b) => a.createdAt - b.createdAt)
               ).map((task) => (
-                <TaskRow key={task.id} task={task} />
+                <TaskRow key={task.id} task={task} dayTasks={allTasks} onJustCompleted={setJustCompleted} />
               ))}
             </ul>
           )}

@@ -14,8 +14,16 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
 - **Priority** — tag tasks High/Medium/Low (defaults Medium), with day-view sort and filter.
 - **Notes** — a free-text note per task, with an indicator on the row and persisting through completion.
 - **Focus Timer** — a countdown for a task's `minutesPerSubtask`, prompting to mark a subtask complete when it ends.
-- **Weekly/Monthly Review** — an auto-populated summary (minutes, tasks completed, streak) per period, with an editable reflection note and a history list.
+- **Weekly/Monthly Review** — an auto-populated summary (minutes, tasks completed, streak) per period, with an editable reflection note, a history list, and PDF export.
 - **Badges** — streak and cumulative-minutes milestones, auto-awarded once and shown in a view-only grid.
+- **Weekly Planning Wizard** — suggests next week's tasks from goal-linked titles and their 4-week average pace; nothing is added until you accept.
+- **Rollover** — prompts to carry yesterday's unfinished subtasks into today as a linked, tagged task.
+- **Task dependencies** — a task can depend on another; it's locked (greyed, non-editable) until the dependency hits 100%, and unlocks automatically.
+- **Insights** — auto-generated weekday patterns, a time-of-day completion chart, planned-vs-actual effort (via Focus Timer), and an energy-vs-completion correlation, each with its own empty/error state.
+- **Named subtasks** — swap a plain count for a titled checklist; completion math stays identical either way.
+- **Voice notes** — record and play back an audio note per task.
+- **Integrations** — optional Google Calendar sync (OAuth, needs your own client ID) and a completion webhook, both with visible failure/retry.
+- **Multi-profile** — fully separate datasets (own IndexedDB database) switchable from a header dropdown; goals can be archived without losing history; tasks can carry a color/icon category.
 
 ## Data model
 

@@ -24,6 +24,10 @@ function GoalCard({ goal, allTaskTitles }: { goal: Goal; allTaskTitles: string[]
     await db.goals.delete(goal.id)
   }
 
+  async function toggleArchive() {
+    await db.goals.update(goal.id, { archivedAt: goal.archivedAt ? undefined : Date.now() })
+  }
+
   async function commitTitle(value: string) {
     const title = value.trim()
     if (!title || title === goal.title) return
@@ -63,14 +67,24 @@ function GoalCard({ goal, allTaskTitles }: { goal: Goal; allTaskTitles: string[]
             />
           </div>
         </div>
-        <button
-          type="button"
-          onClick={remove}
-          className="text-slate-400 hover:text-red-600 text-xs shrink-0 mt-0.5"
-          aria-label={`Delete goal ${goal.title}`}
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2 shrink-0 mt-0.5">
+          <button
+            type="button"
+            onClick={toggleArchive}
+            aria-label={goal.archivedAt ? `Unarchive ${goal.title}` : `Archive ${goal.title}`}
+            className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+          >
+            {goal.archivedAt ? 'Unarchive' : 'Archive'}
+          </button>
+          <button
+            type="button"
+            onClick={remove}
+            className="text-slate-400 hover:text-red-600 text-xs"
+            aria-label={`Delete goal ${goal.title}`}
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {goal.linkedTaskTitles.length > 0 ? (
@@ -107,13 +121,16 @@ function GoalCard({ goal, allTaskTitles }: { goal: Goal; allTaskTitles: string[]
 }
 
 export default function Goals() {
-  const goals = useLiveQuery(() => db.goals.toArray(), []) ?? []
+  const allGoals = useLiveQuery(() => db.goals.toArray(), []) ?? []
   const allTasks = useLiveQuery(() => db.tasks.toArray(), []) ?? []
   const allTaskTitles = [...new Set(allTasks.map((t) => t.title))].sort()
 
   const [title, setTitle] = useState('')
   const [targetDate, setTargetDate] = useState('')
   const [selectedTitles, setSelectedTitles] = useState<string[]>([])
+  const [tab, setTab] = useState<'active' | 'archived'>('active')
+
+  const goals = allGoals.filter((g) => (tab === 'active' ? !g.archivedAt : !!g.archivedAt))
 
   function toggleTitle(t: string) {
     setSelectedTitles((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
@@ -136,9 +153,26 @@ export default function Goals() {
 
   return (
     <div>
-      <h2 className="text-lg font-bold mb-3">Goals</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-bold">Goals</h2>
+        <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-600 p-0.5 bg-slate-100 dark:bg-slate-700">
+          {(['active', 'archived'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`px-2.5 py-1 rounded text-xs font-medium capitalize ${
+                tab === t ? 'bg-white dark:bg-slate-900 shadow text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <form
+      {tab === 'active' && (
+        <form
         onSubmit={handleSubmit}
         className="mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 space-y-2"
       >
@@ -189,11 +223,12 @@ export default function Goals() {
             </div>
           </div>
         )}
-      </form>
+        </form>
+      )}
 
       {goals.length === 0 ? (
         <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-8">
-          No goals yet. Add one above to start rolling up progress across days.
+          {tab === 'active' ? 'No goals yet. Add one above to start rolling up progress across days.' : 'No archived goals.'}
         </p>
       ) : (
         <ul className="space-y-2">

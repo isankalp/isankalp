@@ -1,8 +1,10 @@
 import Dexie, { type Table } from 'dexie'
 import { v4 as uuid } from 'uuid'
+import { dbNameForProfile, getActiveProfileId } from '../lib/profiles'
 import {
   DEFAULT_SETTINGS,
   type Badge,
+  type CompletionEvent,
   type Day,
   type Goal,
   type Habit,
@@ -11,6 +13,7 @@ import {
   type Settings,
   type Task,
   type Template,
+  type VoiceNote,
 } from './models'
 
 export class GoalsDB extends Dexie {
@@ -23,9 +26,11 @@ export class GoalsDB extends Dexie {
   templates!: Table<Template, string>
   reviews!: Table<Review, string>
   badges!: Table<Badge, string>
+  completionEvents!: Table<CompletionEvent, string>
+  voiceNotes!: Table<VoiceNote, string>
 
-  constructor() {
-    super('goals-tracker')
+  constructor(name: string) {
+    super(name)
     this.version(1).stores({
       tasks: 'id, dayId, title, createdAt',
       days: 'id, &date',
@@ -52,10 +57,23 @@ export class GoalsDB extends Dexie {
             if (task.priority === undefined) task.priority = 'Medium'
           })
       })
+    this.version(3).stores({
+      tasks: 'id, dayId, title, createdAt, templateId, dependsOnTaskId',
+      days: 'id, &date',
+      goals: 'id, title, archivedAt',
+      settings: 'id',
+      habits: 'id, archivedAt',
+      habitLogs: 'id, habitId, date, &[habitId+date]',
+      templates: 'id, archivedAt',
+      reviews: 'id, periodType, periodKey',
+      badges: 'id, type',
+      completionEvents: 'id, taskId, at',
+      voiceNotes: 'id, taskId, createdAt',
+    })
   }
 }
 
-export const db = new GoalsDB()
+export const db = new GoalsDB(dbNameForProfile(getActiveProfileId()))
 
 /** Returns today's Day (YYYY-MM-DD, local time), creating it if it doesn't exist yet. */
 export async function getOrCreateDay(date: string): Promise<Day> {
@@ -78,4 +96,10 @@ export async function getSettings(): Promise<Settings> {
   if (existing) return { ...DEFAULT_SETTINGS, ...existing }
   await db.settings.put(DEFAULT_SETTINGS)
   return DEFAULT_SETTINGS
+}
+
+/** Records a completedSubtasks change for Epic 10's time-of-day insight chart. */
+export async function logCompletionEvent(taskId: string, delta: number): Promise<void> {
+  if (delta === 0) return
+  await db.completionEvents.add({ id: uuid(), taskId, delta, at: Date.now() })
 }

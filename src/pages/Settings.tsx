@@ -1,7 +1,19 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { db } from '../db/db'
 import { useSettings } from '../context/SettingsContext'
 import { downloadExport, exportData, importData } from '../lib/exportImport'
 import { notificationPermission, notificationSupported, requestNotificationPermission } from '../lib/reminders'
+import {
+  calendarConfigured,
+  completeGoogleCalendarAuth,
+  connectGoogleCalendar,
+  disconnectGoogleCalendar,
+  hasCalendarToken,
+  syncTodayToCalendar,
+} from '../lib/calendarSync'
+import { isValidWebhookUrl } from '../lib/webhook'
+import { listProfiles, createProfile, switchActiveProfile, deleteProfile, getActiveProfileId } from '../lib/profiles'
+import { todayKey } from '../lib/date'
 import type { CompletedBehavior, DefaultView, Theme } from '../db/models'
 
 function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -51,6 +63,34 @@ export default function Settings() {
   const [status, setStatus] = useState<string | null>(null)
   const [permission, setPermission] = useState(notificationPermission())
 
+  const [calendarConnected, setCalendarConnected] = useState(hasCalendarToken())
+  const [calendarConnecting, setCalendarConnecting] = useState(
+    () => !!new URLSearchParams(window.location.search).get('code'),
+  )
+  const [calendarError, setCalendarError] = useState<string | null>(null)
+  const [syncStatus, setSyncStatus] = useState<string | null>(null)
+
+  const [webhookInput, setWebhookInput] = useState(settings.webhookUrl)
+  const [webhookError, setWebhookError] = useState<string | null>(null)
+
+  const [profileName, setProfileName] = useState('')
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const profiles = listProfiles()
+  const activeProfileId = getActiveProfileId()
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('code')
+    if (!code) return
+    completeGoogleCalendarAuth(code)
+      .then(() => {
+        setCalendarConnected(true)
+        setCalendarError(null)
+        window.history.replaceState({}, '', window.location.pathname)
+      })
+      .catch((err) => setCalendarError(err instanceof Error ? err.message : 'Connection failed.'))
+      .finally(() => setCalendarConnecting(false))
+  }, [])
+
   async function handleToggleReminders() {
     if (settings.remindersEnabled) {
       await updateSettings({ remindersEnabled: false })
@@ -77,6 +117,62 @@ export default function Settings() {
     } catch (err) {
       setStatus(err instanceof Error ? `Import failed: ${err.message}` : 'Import failed.')
     }
+  }
+
+  async function handleConnectCalendar() {
+    setCalendarError(null)
+    setCalendarConnecting(true)
+    try {
+      await connectGoogleCalendar()
+    } catch (err) {
+      setCalendarError(err instanceof Error ? err.message : 'Connection failed.')
+    } finally {
+      setCalendarConnecting(false)
+    }
+  }
+
+  function handleDisconnectCalendar() {
+    disconnectGoogleCalendar()
+    setCalendarConnected(false)
+  }
+
+  async function handleSyncCalendar() {
+    setSyncStatus(null)
+    setCalendarError(null)
+    try {
+      const day = await db.days.where('date').equals(todayKey()).first()
+      const dayTasks = day ? await db.tasks.where('dayId').equals(day.id).toArray() : []
+      const result = await syncTodayToCalendar(dayTasks)
+      setSyncStatus(`Synced ${result.synced} task${result.synced === 1 ? '' : 's'}${result.failed ? `, ${result.failed} failed` : ''}.`)
+    } catch (err) {
+      setCalendarError(err instanceof Error ? err.message : 'Sync failed — retry')
+    }
+  }
+
+  function handleWebhookBlur(value: string) {
+    setWebhookInput(value)
+    if (!isValidWebhookUrl(value)) {
+      setWebhookError('Enter a valid http(s) URL.')
+      return
+    }
+    setWebhookError(null)
+    updateSettings({ webhookUrl: value })
+  }
+
+  function handleCreateProfile() {
+    try {
+      createProfile(profileName)
+      setProfileName('')
+      setProfileError(null)
+      setStatus(`Profile "${profileName.trim()}" created. Switch to it to start using it.`)
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Could not create profile.')
+    }
+  }
+
+  async function handleDeleteProfile(id: string, name: string) {
+    if (!window.confirm(`Delete profile "${name}"? This cannot be undone — all its data will be permanently removed.`)) return
+    await deleteProfile(id)
   }
 
   return (
@@ -195,6 +291,119 @@ export default function Settings() {
         </SettingRow>
       </div>
       {status && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{status}</p>}
+
+      <h2 className="text-lg font-bold mt-6 mb-3">Integrations</h2>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
+        <SettingRow
+          label="Google Calendar"
+          hint={
+            !calendarConfigured()
+              ? 'Not configured — set VITE_GOOGLE_CLIENT_ID to enable.'
+              : calendarConnected
+                ? 'Connected. Sync pushes today\'s incomplete tasks as calendar events sized to remaining minutes.'
+                : 'Connect to push today\'s tasks onto your calendar.'
+          }
+        >
+          <div className="flex items-center gap-1.5">
+            {calendarConnected && (
+              <button
+                type="button"
+                onClick={handleSyncCalendar}
+                className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700"
+              >
+                Sync Today
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={calendarConnected ? handleDisconnectCalendar : handleConnectCalendar}
+              disabled={!calendarConfigured() || calendarConnecting}
+              className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40"
+            >
+              {calendarConnecting ? (
+                <span className="inline-block w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+              ) : calendarConnected ? (
+                'Disconnect'
+              ) : (
+                'Connect'
+              )}
+            </button>
+          </div>
+        </SettingRow>
+        {(calendarError || syncStatus) && (
+          <p className={`text-xs pb-2 ${calendarError ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
+            {calendarError ? (
+              <>
+                {calendarError}{' '}
+                <button type="button" onClick={handleSyncCalendar} className="underline font-medium">
+                  Retry
+                </button>
+              </>
+            ) : (
+              syncStatus
+            )}
+          </p>
+        )}
+
+        <SettingRow label="Webhook URL" hint="POSTs task title, totalMinutes, and completion time whenever a task reaches 100%.">
+          <input
+            type="url"
+            defaultValue={webhookInput}
+            key={settings.webhookUrl}
+            onBlur={(e) => handleWebhookBlur(e.target.value)}
+            placeholder="https://example.com/webhook"
+            className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs w-56"
+          />
+        </SettingRow>
+        {webhookError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{webhookError}</p>}
+      </div>
+
+      <h2 className="text-lg font-bold mt-6 mb-3">Profiles</h2>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
+        {profiles.map((p) => (
+          <SettingRow key={p.id} label={p.name} hint={p.id === activeProfileId ? 'Active' : undefined}>
+            <div className="flex items-center gap-1.5">
+              {p.id !== activeProfileId && (
+                <button
+                  type="button"
+                  onClick={() => switchActiveProfile(p.id)}
+                  className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700"
+                >
+                  Switch to
+                </button>
+              )}
+              {p.id !== 'default' && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteProfile(p.id, p.name)}
+                  className="text-slate-400 hover:text-red-600 text-xs"
+                  aria-label={`Delete profile ${p.name}`}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </SettingRow>
+        ))}
+        <div className="flex items-center gap-1.5 py-3">
+          <input
+            type="text"
+            value={profileName}
+            onChange={(e) => setProfileName(e.target.value)}
+            placeholder="New profile name (e.g. Work)"
+            maxLength={40}
+            className="flex-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+          />
+          <button
+            type="button"
+            onClick={handleCreateProfile}
+            className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700"
+          >
+            + New Profile
+          </button>
+        </div>
+        {profileError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{profileError}</p>}
+      </div>
     </div>
   )
 }

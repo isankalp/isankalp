@@ -16,6 +16,17 @@ export default function AddTaskForm({
   const [priority, setPriority] = useState<Priority>('Medium')
   const [day, setDay] = useState(defaultDate)
   const [error, setError] = useState<string | null>(null)
+  const [suggested, setSuggested] = useState(false)
+
+  async function handleMinutesFocus() {
+    if (minutesPerSubtask.trim() || !title.trim()) return
+    const matches = await db.tasks.where('title').equals(title.trim()).sortBy('createdAt')
+    const recent = matches.slice(-5)
+    if (recent.length === 0) return
+    const avg = recent.reduce((s, t) => s + t.minutesPerSubtask, 0) / recent.length
+    setMinutesPerSubtask(String(Math.round(avg * 10) / 10))
+    setSuggested(true)
+  }
 
   function readValidatedFields(): { minutes: number; total: number } | null {
     const minutes = Number(minutesPerSubtask)
@@ -90,10 +101,17 @@ export default function AddTaskForm({
           type="number"
           placeholder="Min/subtask"
           value={minutesPerSubtask}
-          onChange={(e) => setMinutesPerSubtask(e.target.value)}
+          onChange={(e) => {
+            setMinutesPerSubtask(e.target.value)
+            setSuggested(false)
+          }}
+          onFocus={handleMinutesFocus}
           min={1}
           step="any"
-          className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs w-28"
+          title={suggested ? 'Pre-filled from your last 5 instances of this title — editable' : undefined}
+          className={`px-2.5 py-1.5 rounded-md border bg-white dark:bg-slate-700 text-xs w-28 ${
+            suggested ? 'border-indigo-300 dark:border-indigo-600' : 'border-slate-200 dark:border-slate-600'
+          }`}
         />
         <input
           type="number"

@@ -4,6 +4,7 @@ import { db } from '../db/db'
 import { dailyTotals } from '../lib/aggregate'
 import { completedDateKeys, currentStreak, longestStreak } from '../lib/streaks'
 import { currentPeriodKey, formatPeriodLabel, isPeriodInProgress, periodRange, reviewId } from '../lib/review'
+import { exportReviewPdf } from '../lib/pdfExport'
 import { isTaskComplete, type ReviewPeriodType } from '../db/models'
 import { todayKey } from '../lib/date'
 
@@ -30,17 +31,39 @@ function ReviewDetail({ type, periodKey, onBack }: { type: ReviewPeriodType; per
     await db.reviews.put({ id: reviewId(type, periodKey), periodType: type, periodKey, reflection: text, updatedAt: Date.now() })
   }
 
+  function handleExportPdf() {
+    exportReviewPdf({
+      type,
+      periodKey,
+      minutesPlanned: planned,
+      minutesDone: done,
+      tasksCompleted,
+      streak,
+      longestStreak: best,
+      reflection: review?.reflection ?? '',
+    })
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <button type="button" onClick={onBack} className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
           ← History
         </button>
-        {inProgress && (
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-            In progress
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="text-[11px] px-2 py-0.5 rounded-full border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+          >
+            Export PDF
+          </button>
+          {inProgress && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+              In progress
+            </span>
+          )}
+        </div>
       </div>
 
       <h2 className="text-lg font-bold mb-3">{formatPeriodLabel(type, periodKey)}</h2>

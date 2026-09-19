@@ -2,6 +2,18 @@ export type Priority = 'High' | 'Medium' | 'Low'
 
 export const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
 
+export interface SubtaskItem {
+  id: string
+  title: string
+  completed: boolean
+}
+
+export interface TaskCategory {
+  label: string
+  color: string
+  icon: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -12,6 +24,20 @@ export interface Task {
   priority: Priority
   notes?: string
   templateId?: string
+  /** Named checklist mode (Epic 11). When present, totalSubtasks/completedSubtasks are kept in sync from this list. */
+  subtaskItems?: SubtaskItem[]
+  /** Another task's id that must reach 100% before this task's progress can be edited (Epic 9). */
+  dependsOnTaskId?: string
+  /** Set when this task was created by rolling forward yesterday's unfinished subtasks (Epic 9). */
+  rolledOverFromTaskId?: string
+  rolledOverFromTitle?: string
+  /** Cumulative actual minutes spent in Focus Timer sessions, vs. planned totalMinutes (Epic 10). */
+  actualMinutes?: number
+  /** 1-5 energy rating optionally logged when the task reaches 100% (Epic 10). */
+  energyRating?: number
+  category?: TaskCategory
+  /** Google Calendar event id this task was last synced to, for update-in-place dedup (Epic 13). */
+  googleEventId?: string
   createdAt: number
   updatedAt: number
 }
@@ -26,6 +52,8 @@ export interface Goal {
   title: string
   linkedTaskTitles: string[]
   targetDate?: string
+  /** Soft-archive: hidden from the active Goals list, excluded from active progress, but keeps full history. */
+  archivedAt?: number
 }
 
 export interface Habit {
@@ -77,6 +105,21 @@ export interface Badge {
   notifiedAt?: number
 }
 
+export interface CompletionEvent {
+  id: string
+  taskId: string
+  /** Change in completedSubtasks (usually +1, can be negative for an undo). */
+  delta: number
+  at: number
+}
+
+export interface VoiceNote {
+  id: string
+  taskId: string
+  blob: Blob
+  createdAt: number
+}
+
 export type DefaultView = 'today' | 'week'
 export type Theme = 'light' | 'dark'
 export type CompletedBehavior = 'move' | 'in-place'
@@ -89,6 +132,8 @@ export interface Settings {
   remindersEnabled: boolean
   notStartedThreshold: string // "HH:MM", 24h local time
   eveningNudgeTime: string // "HH:MM", 24h local time
+  webhookUrl: string
+  googleCalendarConnected: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -99,6 +144,8 @@ export const DEFAULT_SETTINGS: Settings = {
   remindersEnabled: false,
   notStartedThreshold: '12:00',
   eveningNudgeTime: '19:00',
+  webhookUrl: '',
+  googleCalendarConnected: false,
 }
 
 /** Clamp completedSubtasks into [0, totalSubtasks], rounding to whole units. */
@@ -146,4 +193,22 @@ export function sortByPriority(tasks: Task[]): Task[] {
     const rank = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
     return rank !== 0 ? rank : a.createdAt - b.createdAt
   })
+}
+
+/** Recompute {totalSubtasks, completedSubtasks} from a named subtask list, keeping numeric math untouched. */
+export function syncFromSubtaskItems(items: SubtaskItem[]): { totalSubtasks: number; completedSubtasks: number } {
+  return { totalSubtasks: items.length, completedSubtasks: items.filter((i) => i.completed).length }
+}
+
+/** GL-5: a named-subtask task must have at least one item to be saved. */
+export function isSubtaskItemsValid(useNamedSubtasks: boolean, items: SubtaskItem[]): boolean {
+  return !useNamedSubtasks || items.length > 0
+}
+
+/** SP-5/6: a task is locked while its dependency (if any) hasn't reached 100% yet. */
+export function isTaskLocked(task: Pick<Task, 'dependsOnTaskId'>, tasksById: Map<string, Task>): boolean {
+  if (!task.dependsOnTaskId) return false
+  const dependency = tasksById.get(task.dependsOnTaskId)
+  if (!dependency) return false
+  return !isTaskComplete(dependency)
 }

@@ -14,6 +14,8 @@ const Stats = lazy(() => import('./pages/Stats'))
 const Calendar = lazy(() => import('./pages/Calendar'))
 const Review = lazy(() => import('./pages/Review'))
 const Badges = lazy(() => import('./pages/Badges'))
+const PlanningWizard = lazy(() => import('./pages/PlanningWizard'))
+const Insights = lazy(() => import('./pages/Insights'))
 
 function Root() {
   const { settings } = useSettings()
@@ -69,6 +71,22 @@ export default function App() {
           element={
             <Suspense fallback={null}>
               <Badges />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/plan"
+          element={
+            <Suspense fallback={null}>
+              <PlanningWizard />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/insights"
+          element={
+            <Suspense fallback={null}>
+              <Insights />
             </Suspense>
           }
         />
