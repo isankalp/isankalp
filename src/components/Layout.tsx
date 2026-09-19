@@ -1,12 +1,20 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { todayKey } from '../lib/date'
 import clsx from 'clsx'
+import BadgeToast from './BadgeToast'
+import KeyboardShortcuts from './KeyboardShortcuts'
+import ProfileSwitcher from './ProfileSwitcher'
+import UndoBanner from './UndoBanner'
 
 const links = [
   { to: `/day/${todayKey()}`, label: 'Today', match: '/day' },
   { to: '/calendar', label: 'Calendar', match: '/calendar' },
   { to: '/stats', label: 'Stats', match: '/stats' },
+  { to: '/insights', label: 'Insights', match: '/insights' },
+  { to: '/plan', label: 'Plan', match: '/plan' },
+  { to: '/review', label: 'Review', match: '/review' },
   { to: '/goals', label: 'Goals', match: '/goals' },
+  { to: '/badges', label: 'Badges', match: '/badges' },
   { to: '/settings', label: 'Settings', match: '/settings' },
 ]
 
@@ -35,11 +43,15 @@ export default function Layout() {
               </NavLink>
             ))}
           </nav>
+          <ProfileSwitcher />
         </div>
       </header>
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-4 text-sm">
         <Outlet />
       </main>
+      <BadgeToast />
+      <UndoBanner />
+      <KeyboardShortcuts />
     </div>
   )
 }

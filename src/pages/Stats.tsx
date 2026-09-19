@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { db } from '../db/db'
 import { bucketTotals, breakdownByTitle, dailyTotals, fillMissingDays, trailingWindow, type Period } from '../lib/aggregate'
@@ -40,7 +41,12 @@ export default function Stats() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold">Stats & Streaks</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold">Stats & Streaks</h2>
+        <Link to="/insights" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+          Insights →
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-center">

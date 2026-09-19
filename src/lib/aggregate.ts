@@ -30,13 +30,13 @@ export function dailyTotals(days: Day[], tasks: Task[]): DayTotal[] {
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
-function weekStart(date: string): string {
+export function weekStart(date: string): string {
   const d = parseDateKey(date)
   const dow = d.getDay() // 0 = Sunday
   return addDays(date, -dow)
 }
 
-function monthKey(date: string): string {
+export function monthKey(date: string): string {
   return date.slice(0, 7) // YYYY-MM
 }
 
