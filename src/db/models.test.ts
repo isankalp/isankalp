@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampCompleted,
+  dayAggregatePercent,
+  dayCompletionState,
   dayMinutesDone,
   dayMinutesPlanned,
   dayPercentComplete,
+  dayUnitTotals,
+  groupTasksByUnit,
+  isCustomUnitValid,
+  isSubtaskItemsValid,
   isTaskComplete,
+  isTaskLocked,
   minutesDone,
   percentComplete,
+  sortByPriority,
+  syncFromSubtaskItems,
   totalMinutes,
+  unitKey,
+  unitLabel,
+  unitOf,
   type Task,
 } from './models'
 
@@ -19,6 +31,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     minutesPerSubtask: 5,
     totalSubtasks: 5,
     completedSubtasks: 2,
+    priority: 'Medium',
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -121,5 +134,175 @@ describe('day rollups', () => {
 
   it('is 0% for a day with no tasks', () => {
     expect(dayPercentComplete([])).toBe(0)
+  })
+})
+
+describe('dayCompletionState (Epic 72: binary, never gradient)', () => {
+  it('is none for a day with no tasks', () => {
+    expect(dayCompletionState([])).toBe('none')
+  })
+
+  it('is complete only when every task is complete', () => {
+    const tasks = [
+      makeTask({ id: 't1', totalSubtasks: 5, completedSubtasks: 5 }),
+      makeTask({ id: 't2', totalSubtasks: 3, completedSubtasks: 3 }),
+    ]
+    expect(dayCompletionState(tasks)).toBe('complete')
+  })
+
+  it('is incomplete if any single task is not fully done, regardless of the others', () => {
+    const tasks = [
+      makeTask({ id: 't1', totalSubtasks: 5, completedSubtasks: 5 }),
+      makeTask({ id: 't2', totalSubtasks: 3, completedSubtasks: 0 }),
+    ]
+    expect(dayCompletionState(tasks)).toBe('incomplete')
+  })
+})
+
+describe('dayAggregatePercent (Epic 73: unit-agnostic, subtask-count based)', () => {
+  it('is null (never 0) for a day with no tasks', () => {
+    expect(dayAggregatePercent([])).toBeNull()
+  })
+
+  it('sums completedSubtasks/totalSubtasks across tasks regardless of unit', () => {
+    const tasks = [
+      makeTask({ id: 't1', unit: 'minutes', totalSubtasks: 10, completedSubtasks: 5 }),
+      makeTask({ id: 't2', unit: 'pages', minutesPerSubtask: 1, totalSubtasks: 10, completedSubtasks: 10 }),
+    ]
+    // (5 + 10) / (10 + 10) = 75%, independent of minutesPerSubtask weighting
+    expect(dayAggregatePercent(tasks)).toBe(75)
+  })
+})
+
+describe('sortByPriority', () => {
+  it('orders High before Medium before Low', () => {
+    const tasks = [
+      makeTask({ id: 'low', priority: 'Low', createdAt: 1 }),
+      makeTask({ id: 'high', priority: 'High', createdAt: 2 }),
+      makeTask({ id: 'medium', priority: 'Medium', createdAt: 3 }),
+    ]
+    expect(sortByPriority(tasks).map((t) => t.id)).toEqual(['high', 'medium', 'low'])
+  })
+
+  it('breaks ties within the same priority by creation order', () => {
+    const tasks = [
+      makeTask({ id: 'second', priority: 'High', createdAt: 2 }),
+      makeTask({ id: 'first', priority: 'High', createdAt: 1 }),
+    ]
+    expect(sortByPriority(tasks).map((t) => t.id)).toEqual(['first', 'second'])
+  })
+})
+
+describe('syncFromSubtaskItems (Epic 11: named subtasks drive the same math)', () => {
+  it('derives totalSubtasks from item count and completedSubtasks from checked count', () => {
+    const items = [
+      { id: '1', title: 'Q1', completed: true },
+      { id: '2', title: 'Q2', completed: false },
+      { id: '3', title: 'Q3', completed: true },
+    ]
+    expect(syncFromSubtaskItems(items)).toEqual({ totalSubtasks: 3, completedSubtasks: 2 })
+  })
+
+  it('is zero/zero for an empty list', () => {
+    expect(syncFromSubtaskItems([])).toEqual({ totalSubtasks: 0, completedSubtasks: 0 })
+  })
+})
+
+describe('isSubtaskItemsValid (GL-5)', () => {
+  it('is always valid in numeric mode', () => {
+    expect(isSubtaskItemsValid(false, [])).toBe(true)
+  })
+
+  it('blocks a zero-item named-subtask list', () => {
+    expect(isSubtaskItemsValid(true, [])).toBe(false)
+  })
+
+  it('allows a non-empty named-subtask list', () => {
+    expect(isSubtaskItemsValid(true, [{ id: '1', title: 'Q1', completed: false }])).toBe(true)
+  })
+})
+
+describe('unitOf/unitLabel/unitKey (Epic 32: Custom Units)', () => {
+  it('CU-5: a legacy task with no unit set defaults to minutes', () => {
+    const task = makeTask({ unit: undefined })
+    expect(unitOf(task)).toBe('minutes')
+    expect(unitLabel(task)).toBe('min')
+  })
+
+  it('labels a built-in unit', () => {
+    expect(unitLabel(makeTask({ unit: 'pages' }))).toBe('pages')
+    expect(unitLabel(makeTask({ unit: 'dollars' }))).toBe('$')
+  })
+
+  it('CU-2: a custom unit uses the user-provided label', () => {
+    expect(unitLabel(makeTask({ unit: 'custom', customUnitLabel: 'calories' }))).toBe('calories')
+  })
+
+  it('falls back to a generic label if a custom unit has no label', () => {
+    expect(unitLabel(makeTask({ unit: 'custom', customUnitLabel: '' }))).toBe('units')
+  })
+
+  it('two different custom labels get different grouping keys', () => {
+    const a = unitKey(makeTask({ unit: 'custom', customUnitLabel: 'calories' }))
+    const b = unitKey(makeTask({ unit: 'custom', customUnitLabel: 'dollars saved' }))
+    expect(a).not.toBe(b)
+  })
+})
+
+describe('isCustomUnitValid (CU-2)', () => {
+  it('is always valid for a built-in unit', () => {
+    expect(isCustomUnitValid('minutes', '')).toBe(true)
+  })
+
+  it('requires a non-empty label for a custom unit', () => {
+    expect(isCustomUnitValid('custom', '')).toBe(false)
+    expect(isCustomUnitValid('custom', '  ')).toBe(false)
+    expect(isCustomUnitValid('custom', 'calories')).toBe(true)
+  })
+})
+
+describe('groupTasksByUnit / dayUnitTotals (CU-4: never sum across units)', () => {
+  const minutesTask = makeTask({ id: 'm1', unit: 'minutes', minutesPerSubtask: 5, totalSubtasks: 5, completedSubtasks: 2 })
+  const pagesTask = makeTask({ id: 'p1', unit: 'pages', minutesPerSubtask: 10, totalSubtasks: 10, completedSubtasks: 5 })
+  const tasks = [minutesTask, pagesTask]
+
+  it('groups tasks into separate buckets per unit', () => {
+    const groups = groupTasksByUnit(tasks)
+    expect(groups.size).toBe(2)
+    expect(groups.get('minutes')).toEqual([minutesTask])
+    expect(groups.get('pages')).toEqual([pagesTask])
+  })
+
+  it('computes independent totals per unit, never summed together', () => {
+    const totals = dayUnitTotals(tasks)
+    expect(totals).toHaveLength(2)
+    const minutesTotal = totals.find((t) => t.key === 'minutes')!
+    const pagesTotal = totals.find((t) => t.key === 'pages')!
+    expect(minutesTotal).toMatchObject({ label: 'min', planned: 25, done: 10, percent: 40 })
+    expect(pagesTotal).toMatchObject({ label: 'pages', planned: 100, done: 50, percent: 50 })
+  })
+})
+
+describe('isTaskLocked (SP-5/6: dependencies)', () => {
+  it('is unlocked when there is no dependency', () => {
+    const task = makeTask({ dependsOnTaskId: undefined })
+    expect(isTaskLocked(task, new Map())).toBe(false)
+  })
+
+  it('is locked while the dependency is incomplete', () => {
+    const dependency = makeTask({ id: 'dep', totalSubtasks: 5, completedSubtasks: 2 })
+    const task = makeTask({ id: 'main', dependsOnTaskId: 'dep' })
+    expect(isTaskLocked(task, new Map([['dep', dependency]]))).toBe(true)
+  })
+
+  it('unlocks automatically once the dependency reaches 100%', () => {
+    const dependency = makeTask({ id: 'dep', totalSubtasks: 5, completedSubtasks: 5 })
+    const task = makeTask({ id: 'main', dependsOnTaskId: 'dep' })
+    expect(isTaskLocked(task, new Map([['dep', dependency]]))).toBe(false)
+  })
+
+  it('is unlocked if the dependency id points nowhere', () => {
+    const task = makeTask({ dependsOnTaskId: 'missing' })
+    expect(isTaskLocked(task, new Map())).toBe(false)
   })
 })

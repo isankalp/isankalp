@@ -1,4 +1,12 @@
-import { dayMinutesDone, dayMinutesPlanned, type Day, type Task } from '../db/models'
+import {
+  dayAggregatePercent,
+  dayCompletionState,
+  dayMinutesDone,
+  dayMinutesPlanned,
+  type Day,
+  type DayCompletionState,
+  type Task,
+} from '../db/models'
 import { addDays, parseDateKey, todayKey, toDateKey } from './date'
 
 export interface DayTotal {
@@ -30,13 +38,30 @@ export function dailyTotals(days: Day[], tasks: Task[]): DayTotal[] {
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
-function weekStart(date: string): string {
+export interface DayCompletionSummary {
+  date: string
+  state: DayCompletionState
+  percent: number | null
+}
+
+/** Epic 72/73: one entry per Day, the binary completion state (for calendar color) and the
+ *  cross-unit aggregate percent (for the detail view) computed together so both always agree on
+ *  which tasks they're looking at. */
+export function dailyCompletionSummaries(days: Day[], tasks: Task[]): DayCompletionSummary[] {
+  const byDayId = tasksByDayId(tasks)
+  return days.map((day) => {
+    const dayTasks = byDayId.get(day.id) ?? []
+    return { date: day.date, state: dayCompletionState(dayTasks), percent: dayAggregatePercent(dayTasks) }
+  })
+}
+
+export function weekStart(date: string): string {
   const d = parseDateKey(date)
   const dow = d.getDay() // 0 = Sunday
   return addDays(date, -dow)
 }
 
-function monthKey(date: string): string {
+export function monthKey(date: string): string {
   return date.slice(0, 7) // YYYY-MM
 }
 
