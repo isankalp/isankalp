@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   type Badge,
   type CompletionEvent,
+  type CompletionPhoto,
   type CustomFieldDef,
   type Day,
   type Goal,
@@ -34,6 +35,7 @@ export class GoalsDB extends Dexie {
   customFields!: Table<CustomFieldDef, string>
   taskHistory!: Table<TaskHistoryEntry, string>
   webhookQueue!: Table<WebhookQueueItem, string>
+  completionPhotos!: Table<CompletionPhoto, string>
 
   constructor(name: string) {
     super(name)
@@ -118,6 +120,23 @@ export class GoalsDB extends Dexie {
             if (task.unit === undefined) task.unit = 'minutes'
           })
       })
+    this.version(6).stores({
+      tasks: 'id, dayId, title, createdAt, templateId, dependsOnTaskId',
+      days: 'id, &date',
+      goals: 'id, title, archivedAt',
+      settings: 'id',
+      habits: 'id, archivedAt',
+      habitLogs: 'id, habitId, date, &[habitId+date]',
+      templates: 'id, archivedAt',
+      reviews: 'id, periodType, periodKey',
+      badges: 'id, type',
+      completionEvents: 'id, taskId, at',
+      voiceNotes: 'id, taskId, createdAt',
+      customFields: 'id, name',
+      taskHistory: 'id, taskId, at',
+      webhookQueue: 'id, createdAt',
+      completionPhotos: 'id, taskId, completionEventId, createdAt',
+    })
   }
 }
 
@@ -146,10 +165,13 @@ export async function getSettings(): Promise<Settings> {
   return DEFAULT_SETTINGS
 }
 
-/** Records a completedSubtasks change for Epic 10's time-of-day insight chart. */
-export async function logCompletionEvent(taskId: string, delta: number): Promise<void> {
-  if (delta === 0) return
-  await db.completionEvents.add({ id: uuid(), taskId, delta, at: Date.now() })
+/** Records a completedSubtasks change for Epic 10's time-of-day insight chart. Returns the event id so a
+ *  positive (increment) change can optionally have a photo attached to it afterward (Epic 41). */
+export async function logCompletionEvent(taskId: string, delta: number): Promise<string | null> {
+  if (delta === 0) return null
+  const id = uuid()
+  await db.completionEvents.add({ id, taskId, delta, at: Date.now() })
+  return id
 }
 
 /** Applies a task patch while recording the previous values of the changed fields, for Epic 20's history/restore. */

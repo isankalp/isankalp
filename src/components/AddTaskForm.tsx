@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { v4 as uuid } from 'uuid'
 import { db, getOrCreateDay } from '../db/db'
 import { PRIORITIES, UNIT_TYPES, isCustomUnitValid, unitLabel, type Priority, type UnitType } from '../db/models'
 import { useT } from '../lib/i18n'
+import { useSettings } from '../context/SettingsContext'
+import { capacityPercent, checkCapacity, isCapacityEnabled } from '../lib/capacity'
+import { addDays } from '../lib/date'
+import { weekStart } from '../lib/aggregate'
 
 export interface AddTaskPrefill {
   title: string
@@ -39,11 +44,32 @@ export default function AddTaskForm({
   const [suggested, setSuggested] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const t = useT()
+  const { settings } = useSettings()
 
   useEffect(() => {
     if (prefill) titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount for this prefill instance
   }, [])
+
+  const capacityOn = isCapacityEnabled(settings.capacityMode, settings.capacityMinutes)
+  const capacityScopeTasks =
+    useLiveQuery(async () => {
+      if (!capacityOn) return []
+      if (settings.capacityMode === 'daily') {
+        const d = await db.days.where('date').equals(day).first()
+        return d ? db.tasks.where('dayId').equals(d.id).toArray() : []
+      }
+      const start = weekStart(day)
+      const end = addDays(start, 6)
+      const weekDays = await db.days.where('date').between(start, end, true, true).toArray()
+      const dayIds = weekDays.map((wd) => wd.id)
+      return dayIds.length ? db.tasks.where('dayId').anyOf(dayIds).toArray() : []
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- capacityOn/settings.capacityMode gate what's fetched
+    }, [day, capacityOn, settings.capacityMode]) ?? []
+
+  const addingMinutes = capacityOn && unit === 'minutes' ? Number(minutesPerSubtask) * Number(totalSubtasks) : 0
+  const capacityCheck =
+    capacityOn && addingMinutes > 0 ? checkCapacity(capacityScopeTasks, addingMinutes, settings.capacityMinutes) : null
 
   async function handleMinutesFocus() {
     if (minutesPerSubtask.trim() || !title.trim()) return
@@ -208,6 +234,12 @@ export default function AddTaskForm({
           </span>
         )}
       </div>
+      {capacityCheck?.overBudget && (
+        <p className="text-[11px] text-amber-600 dark:text-amber-400" role="status">
+          ⚠ This would put {settings.capacityMode === 'daily' ? 'today' : 'this week'} at {capacityCheck.totalAfter}/{capacityCheck.budget} min (
+          {capacityPercent(capacityCheck.totalAfter, capacityCheck.budget)}%) of your capacity.
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <button
           type="submit"

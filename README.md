@@ -37,6 +37,14 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
 - **Contribution Heatmap** — a private, GitHub-style yearly grid shaded by each day's percent complete, filterable by unit or category/tag.
 - **Privacy** — a dedicated Export All Data (every table, one JSON file) and a double-confirmation Delete All My Data that irreversibly wipes this browser's local copy.
 - **Language** — English, Spanish, and Hindi for navigation, Settings, and the add-task form, with untranslated strings falling back to readable English and user-entered content (titles, notes) never translated.
+- **Capacity Planning** — an optional daily or weekly minutes budget; adding a task that would push the day/week past it shows a non-blocking warning, and a progress bar tracks planned-vs-available. Off by default — no warnings unless you set a budget.
+- **Progress Photo Evidence** — attach a photo to any subtask completion (optional, never blocks the increment if it fails), view a task's photos chronologically, and compare two side by side.
+- **Bulk Task Operations** — multi-select tasks on a day to move, duplicate (reset to 0 progress), tag, or delete them together; bulk delete requires a count-specific confirmation and is undoable.
+- **Time-Blocking view** — drag tasks from an Unscheduled sidebar onto an hourly grid, resize/reposition blocks with 15-minute snapping, and see overlapping blocks flagged and laid out side by side so every block stays clickable.
+
+## Skipped this round
+
+Some requested features need a real backend, multi-user accounts, or a native app this project doesn't have, and were skipped rather than faked: public/shared profiles or leaderboards, a template marketplace, community challenges, a mentor/coach dashboard, health-app sync, notification-digest emails, and smartwatch companions. Each was scoped out explicitly rather than half-built.
 
 ## Data model
 

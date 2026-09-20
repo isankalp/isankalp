@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import ImportCsvModal from '../components/ImportCsvModal'
 import CustomFieldsSettings from '../components/CustomFieldsSettings'
@@ -17,8 +18,10 @@ import {
 } from '../lib/calendarSync'
 import { isValidWebhookUrl } from '../lib/webhook'
 import { listProfiles, createProfile, switchActiveProfile, deleteProfile, getActiveProfileId } from '../lib/profiles'
-import { todayKey } from '../lib/date'
-import type { CompletedBehavior, DefaultView, Theme } from '../db/models'
+import { addDays, todayKey } from '../lib/date'
+import { weekStart } from '../lib/aggregate'
+import { capacityPercent, minutesUnitPlanned } from '../lib/capacity'
+import type { CapacityMode, CompletedBehavior, DefaultView, Theme } from '../db/models'
 
 function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -69,6 +72,8 @@ export default function Settings() {
   const [csvImportOpen, setCsvImportOpen] = useState(false)
   const [blocklistInput, setBlocklistInput] = useState('')
   const [permission, setPermission] = useState(notificationPermission())
+  const [capacityInput, setCapacityInput] = useState(settings.capacityMinutes > 0 ? String(settings.capacityMinutes) : '')
+  const [capacityError, setCapacityError] = useState<string | null>(null)
 
   const [calendarConnected, setCalendarConnected] = useState(hasCalendarToken())
   const [calendarConnecting, setCalendarConnecting] = useState(
@@ -148,6 +153,26 @@ export default function Settings() {
     }
   }
 
+  function handleCapacityModeChange(mode: CapacityMode) {
+    updateSettings({ capacityMode: mode })
+  }
+
+  function handleCapacityBlur(value: string) {
+    if (!value.trim()) {
+      setCapacityInput('')
+      setCapacityError(null)
+      updateSettings({ capacityMinutes: 0 })
+      return
+    }
+    const minutes = Number(value)
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      setCapacityError('Enter a budget greater than 0.')
+      return
+    }
+    setCapacityError(null)
+    updateSettings({ capacityMinutes: minutes })
+  }
+
   function handleAddBlocklistDomain() {
     const domain = blocklistInput.trim().toLowerCase()
     if (!domain || settings.focusBlocklist.includes(domain)) {
@@ -213,6 +238,18 @@ export default function Settings() {
     if (!window.confirm(`Delete profile "${name}"? This cannot be undone — all its data will be permanently removed.`)) return
     await deleteProfile(id)
   }
+
+  const weekTasks =
+    useLiveQuery(async () => {
+      const start = weekStart(todayKey())
+      const end = addDays(start, 6)
+      const weekDays = await db.days.where('date').between(start, end, true, true).toArray()
+      const dayIds = weekDays.map((d) => d.id)
+      if (dayIds.length === 0) return []
+      return db.tasks.where('dayId').anyOf(dayIds).toArray()
+    }, []) ?? []
+  const weekPlanned = minutesUnitPlanned(weekTasks)
+  const weekUsagePercent = capacityPercent(weekPlanned, settings.capacityMinutes)
 
   if (deleted) {
     return (
@@ -424,6 +461,60 @@ export default function Settings() {
       </div>
       {csvImportOpen && <ImportCsvModal defaultDate={todayKey()} onClose={() => setCsvImportOpen(false)} />}
       {status && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{status}</p>}
+
+      <h2 className="text-lg font-bold mt-6 mb-3">Capacity</h2>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
+        <SettingRow label="Budget period" hint="Whether the minutes budget below applies per day or per week.">
+          <SegmentedControl<CapacityMode>
+            value={settings.capacityMode}
+            onChange={handleCapacityModeChange}
+            options={[
+              { value: 'off', label: 'Off' },
+              { value: 'daily', label: 'Daily' },
+              { value: 'weekly', label: 'Weekly' },
+            ]}
+          />
+        </SettingRow>
+        {settings.capacityMode !== 'off' && (
+          <SettingRow label="Available minutes" hint="A non-blocking warning appears on the add-task form once planned time would exceed this.">
+            <input
+              type="number"
+              defaultValue={capacityInput}
+              key={settings.capacityMinutes}
+              onChange={(e) => setCapacityInput(e.target.value)}
+              onBlur={(e) => handleCapacityBlur(e.target.value)}
+              min={1}
+              step="any"
+              placeholder="e.g. 120"
+              aria-label="Available capacity minutes"
+              className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs w-24"
+            />
+          </SettingRow>
+        )}
+        {capacityError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{capacityError}</p>}
+        {settings.capacityMode === 'off' ? (
+          <p className="text-xs text-slate-400 dark:text-slate-500 pb-3">No capacity set — overcommitment warnings are off.</p>
+        ) : (
+          settings.capacityMinutes > 0 && (
+            <div className="pb-3">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-slate-500 dark:text-slate-400">This week's minutes-based usage</span>
+                <span className="font-medium tabular-nums">
+                  {weekPlanned} / {settings.capacityMinutes} min ({weekUsagePercent}%)
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    weekUsagePercent >= 100 ? 'bg-red-500' : weekUsagePercent >= 80 ? 'bg-amber-500' : 'bg-indigo-500'
+                  }`}
+                  style={{ width: `${Math.min(100, weekUsagePercent)}%` }}
+                />
+              </div>
+            </div>
+          )
+        )}
+      </div>
 
       <h2 className="text-lg font-bold mt-6 mb-3">{t('Focus')}</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-3">

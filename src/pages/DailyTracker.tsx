@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AddTaskForm, { type AddTaskPrefill } from '../components/AddTaskForm'
+import BulkActionToolbar from '../components/BulkActionToolbar'
 import CompletionFollowUp from '../components/CompletionFollowUp'
 import DayNav from '../components/DayNav'
 import HabitWidget from '../components/HabitWidget'
@@ -20,9 +21,10 @@ import {
   type Task,
 } from '../db/models'
 import { useSettings } from '../context/SettingsContext'
-import { todayKey } from '../lib/date'
+import { addDays, todayKey } from '../lib/date'
 import { weekStart } from '../lib/aggregate'
 import { markWeeklyPlanPrompted, shouldPromptWeeklyPlan } from '../lib/planningWizard'
+import { capacityPercent, isCapacityEnabled, minutesUnitPlanned } from '../lib/capacity'
 
 export default function DailyTracker() {
   const { date } = useParams<{ date: string }>()
@@ -32,10 +34,29 @@ export default function DailyTracker() {
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [planBannerDismissed, setPlanBannerDismissed] = useState(false)
-  const [justCompleted, setJustCompleted] = useState<Task | null>(null)
+  const [justCompleted, setJustCompleted] = useState<{ task: Task; completionEventId: string | null } | null>(null)
+  function handleJustCompleted(task: Task, completionEventId: string | null) {
+    setJustCompleted({ task, completionEventId })
+  }
   const [prefill, setPrefill] = useState<AddTaskPrefill | undefined>(undefined)
   const [prefillNonce, setPrefillNonce] = useState(0)
   const [importOpen, setImportOpen] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function exitSelectionMode() {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
 
   const day = useLiveQuery(() => db.days.where('date').equals(activeDate).first(), [activeDate])
   const tasks = useLiveQuery(async () => {
@@ -59,13 +80,49 @@ export default function DailyTracker() {
   const unitTotals = dayUnitTotals(allTasks)
   const moveCompleted = settings.completedBehavior === 'move'
 
+  const capacityOn = isCapacityEnabled(settings.capacityMode, settings.capacityMinutes)
+  const weekTasksForCapacity =
+    useLiveQuery(async () => {
+      if (!capacityOn || settings.capacityMode !== 'weekly') return []
+      const start = weekStart(activeDate)
+      const end = addDays(start, 6)
+      const weekDays = await db.days.where('date').between(start, end, true, true).toArray()
+      const dayIds = weekDays.map((d) => d.id)
+      return dayIds.length ? db.tasks.where('dayId').anyOf(dayIds).toArray() : []
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- capacityOn/mode gate whether this queries at all
+    }, [activeDate, capacityOn, settings.capacityMode]) ?? []
+  const capacityPlanned = settings.capacityMode === 'weekly' ? minutesUnitPlanned(weekTasksForCapacity) : minutesUnitPlanned(allTasks)
+  const capacityPct = capacityPercent(capacityPlanned, settings.capacityMinutes)
+
   const isTodayView = activeDate === todayKey()
   const currentWeek = weekStart(todayKey())
   const showPlanBanner = isTodayView && !planBannerDismissed && shouldPromptWeeklyPlan(currentWeek)
 
+  const selectedTasks = allTasks.filter((t) => selectedIds.has(t.id))
+
+  function renderTask(task: Task) {
+    return (
+      <TaskRow
+        key={task.id}
+        task={task}
+        dayTasks={allTasks}
+        onJustCompleted={handleJustCompleted}
+        selectable={selectionMode}
+        selected={selectedIds.has(task.id)}
+        onToggleSelect={() => toggleSelect(task.id)}
+      />
+    )
+  }
+
   return (
     <div>
       <DayNav date={activeDate} />
+
+      <div className="flex justify-end mb-2">
+        <Link to={`/timeblock/${activeDate}`} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+          🗓 Time-Blocking view →
+        </Link>
+      </div>
 
       <QuickAddBar
         date={activeDate}
@@ -134,7 +191,39 @@ export default function DailyTracker() {
         )}
       </div>
 
-      {justCompleted && <CompletionFollowUp task={justCompleted} onDone={() => setJustCompleted(null)} />}
+      {capacityOn && (
+        <div className="mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="text-slate-500 dark:text-slate-400">Capacity ({settings.capacityMode})</span>
+            <span className="font-medium tabular-nums">
+              {capacityPlanned} / {settings.capacityMinutes} min ({capacityPct}%)
+            </span>
+          </div>
+          <div
+            role="progressbar"
+            aria-valuenow={capacityPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Capacity used"
+            className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"
+          >
+            <div
+              className={`h-full rounded-full transition-all ${
+                capacityPct >= 100 ? 'bg-red-500' : capacityPct >= 80 ? 'bg-amber-500' : 'bg-indigo-500'
+              }`}
+              style={{ width: `${Math.min(100, capacityPct)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {justCompleted && (
+        <CompletionFollowUp
+          task={justCompleted.task}
+          completionEventId={justCompleted.completionEventId}
+          onDone={() => setJustCompleted(null)}
+        />
+      )}
 
       <HabitWidget date={activeDate} />
 
@@ -158,7 +247,7 @@ export default function DailyTracker() {
       {importOpen && <ImportCsvModal defaultDate={activeDate} onClose={() => setImportOpen(false)} />}
 
       {allTasks.length > 0 && (
-        <div className="flex items-center gap-2 mb-3 text-xs">
+        <div className="flex items-center gap-2 mb-3 text-xs flex-wrap">
           <button
             type="button"
             onClick={() => setSortPriority((v) => !v)}
@@ -183,8 +272,21 @@ export default function DailyTracker() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
+            className={
+              selectionMode
+                ? 'ml-auto px-2.5 py-1 rounded-full bg-indigo-600 text-white font-medium'
+                : 'ml-auto px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+            }
+          >
+            {selectionMode ? 'Done selecting' : 'Select'}
+          </button>
         </div>
       )}
+
+      {selectionMode && selectedTasks.length > 0 && <BulkActionToolbar selectedTasks={selectedTasks} onDone={exitSelectionMode} />}
 
       {allTasks.length === 0 ? (
         <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-8">
@@ -194,21 +296,13 @@ export default function DailyTracker() {
         <div className="space-y-4">
           {moveCompleted ? (
             <>
-              <ul className="space-y-2">
-                {activeTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} dayTasks={allTasks} onJustCompleted={setJustCompleted} />
-                ))}
-              </ul>
+              <ul className="space-y-2">{activeTasks.map(renderTask)}</ul>
               {completedTasks.length > 0 && (
                 <details open className="group">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
                     Completed ({completedTasks.length})
                   </summary>
-                  <ul className="space-y-2">
-                    {completedTasks.map((task) => (
-                      <TaskRow key={task.id} task={task} dayTasks={allTasks} onJustCompleted={setJustCompleted} />
-                    ))}
-                  </ul>
+                  <ul className="space-y-2">{completedTasks.map(renderTask)}</ul>
                 </details>
               )}
             </>
@@ -217,9 +311,7 @@ export default function DailyTracker() {
               {(sortPriority
                 ? sortByPriority([...activeTasks, ...completedTasks])
                 : [...activeTasks, ...completedTasks].sort((a, b) => a.createdAt - b.createdAt)
-              ).map((task) => (
-                <TaskRow key={task.id} task={task} dayTasks={allTasks} onJustCompleted={setJustCompleted} />
-              ))}
+              ).map(renderTask)}
             </ul>
           )}
         </div>

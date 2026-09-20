@@ -17,6 +17,8 @@ import {
 } from '../db/models'
 import FocusTimer from './FocusTimer'
 import NamedSubtasks from './NamedSubtasks'
+import PhotoEvidencePrompt from './PhotoEvidencePrompt'
+import PhotoGallery from './PhotoGallery'
 import TaskCustomFields from './TaskCustomFields'
 import TaskHistoryPanel from './TaskHistoryPanel'
 import VoiceNoteRecorder from './VoiceNoteRecorder'
@@ -37,11 +39,19 @@ export default function TaskRow({
   task,
   dayTasks,
   onJustCompleted,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   task: Task
   dayTasks: Task[]
-  /** Called once when this task transitions to 100% — parent shows the energy prompt / webhook retry so it survives this row moving to the Completed section. */
-  onJustCompleted?: (task: Task) => void
+  /** Called once when this task transitions to 100% — parent shows the energy prompt / webhook retry / photo
+   *  evidence prompt so they survive this row moving to the Completed section. */
+  onJustCompleted?: (task: Task, completionEventId: string | null) => void
+  /** Bulk-selection mode (Epic 43) — renders a checkbox inside this row's own <li>, never a nested list item. */
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const complete = isTaskComplete(task)
   const percent = percentComplete(task)
@@ -54,6 +64,7 @@ export default function TaskRow({
   const [subtasksOpen, setSubtasksOpen] = useState(false)
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [photoPromptEventId, setPhotoPromptEventId] = useState<string | null>(null)
 
   const tasksById = new Map(dayTasks.map((t) => [t.id, t]))
   const locked = isTaskLocked(task, tasksById)
@@ -81,10 +92,15 @@ export default function TaskRow({
       patch.actualMinutes = (task.actualMinutes ?? 0) + actualMinutes
     }
     await commitField(patch, `Update "${task.title}" progress`)
-    await logCompletionEvent(task.id, clamped - task.completedSubtasks)
+    const delta = clamped - task.completedSubtasks
+    const eventId = await logCompletionEvent(task.id, delta)
     const nowComplete = clamped === task.totalSubtasks && task.totalSubtasks > 0
     if (!wasComplete && nowComplete) {
-      onJustCompleted?.({ ...task, ...patch, completedSubtasks: clamped })
+      // Row is about to unmount (moves to the Completed section) — hand the photo prompt to the page level.
+      onJustCompleted?.({ ...task, ...patch, completedSubtasks: clamped }, eventId)
+    } else if (delta > 0 && eventId) {
+      // PP-1: offer to attach evidence to this specific increment while the row is still mounted.
+      setPhotoPromptEventId(eventId)
     }
   }
 
@@ -167,6 +183,15 @@ export default function TaskRow({
       )}
     >
       <div className="flex items-start justify-between gap-2">
+        {selectable && (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={onToggleSelect}
+            aria-label={`Select "${task.title}" for bulk actions`}
+            className="mt-1 shrink-0"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             {locked && (
@@ -288,6 +313,10 @@ export default function TaskRow({
       {detailsOpen && (
         <div className="space-y-2">
           <TaskCustomFields task={task} />
+          <details className="mt-1">
+            <summary className="cursor-pointer text-[11px] text-slate-500 dark:text-slate-400">Photo evidence</summary>
+            <PhotoGallery task={task} />
+          </details>
           <details className="mt-1">
             <summary className="cursor-pointer text-[11px] text-slate-500 dark:text-slate-400">History</summary>
             <TaskHistoryPanel task={task} />
@@ -418,6 +447,12 @@ export default function TaskRow({
           onClose={() => setFocusOpen(false)}
           onComplete={(actualMinutes) => commitCompleted(task.completedSubtasks + 1, actualMinutes)}
         />
+      )}
+
+      {photoPromptEventId && (
+        <div className="mt-2">
+          <PhotoEvidencePrompt taskId={task.id} completionEventId={photoPromptEventId} onDismiss={() => setPhotoPromptEventId(null)} />
+        </div>
       )}
     </li>
   )

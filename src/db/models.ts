@@ -56,6 +56,10 @@ export interface Task {
   unit?: UnitType
   /** User-defined label, only meaningful when unit === 'custom'. */
   customUnitLabel?: string
+  /** "HH:MM" 24h local time this task is scheduled to start in the Time-Blocking view (Epic 44). Absent = unscheduled. */
+  scheduledStart?: string
+  /** Block duration shown on the Time-Blocking grid, independent of the task's own subtask math (Epic 44). */
+  scheduledDurationMinutes?: number
   createdAt: number
   updatedAt: number
 }
@@ -169,6 +173,16 @@ export interface WebhookQueueItem {
   createdAt: number
 }
 
+/** A photo attached to one specific completion event (Epic 41). Never required for the increment itself to save. */
+export interface CompletionPhoto {
+  id: string
+  taskId: string
+  completionEventId: string
+  blob: Blob
+  mimeType: string
+  createdAt: number
+}
+
 export type DefaultView = 'today' | 'week'
 export type Theme = 'light' | 'dark'
 export type CompletedBehavior = 'move' | 'in-place'
@@ -193,7 +207,13 @@ export interface Settings {
   lastAutoBackupFailedAt?: number
   /** UI language (Epic 38). User-generated content is never translated, only static UI strings. */
   language: Locale
+  /** CP-5: capacity is fully opt-in — 'off' means no overcommitment warnings ever appear. */
+  capacityMode: CapacityMode
+  /** Minutes budget for the chosen mode (per day, or per week). Ignored while capacityMode is 'off'. */
+  capacityMinutes: number
 }
+
+export type CapacityMode = 'off' | 'daily' | 'weekly'
 
 export type Locale = 'en' | 'es' | 'hi'
 
@@ -218,6 +238,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoBackupEnabled: false,
   autoBackupIntervalDays: 1,
   language: 'en',
+  capacityMode: 'off',
+  capacityMinutes: 0,
 }
 
 /** Clamp completedSubtasks into [0, totalSubtasks], rounding to whole units. */

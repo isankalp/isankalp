@@ -24,8 +24,17 @@ interface VoiceNoteExport {
   createdAt: number
 }
 
+interface CompletionPhotoExport {
+  id: string
+  taskId: string
+  completionEventId: string
+  blobDataUrl: string
+  mimeType: string
+  createdAt: number
+}
+
 interface Backup {
-  version: 2
+  version: 3
   exportedAt: string
   tasks: Task[]
   days: Day[]
@@ -41,6 +50,7 @@ interface Backup {
   customFields: CustomFieldDef[]
   taskHistory: TaskHistoryEntry[]
   webhookQueue: WebhookQueueItem[]
+  completionPhotos: CompletionPhotoExport[]
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -59,23 +69,39 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 
 /** DC-1: a complete, machine-readable export of every task, goal, note, and setting — every table in the database. */
 export async function exportData(): Promise<string> {
-  const [tasks, days, goals, settings, habits, habitLogs, templates, reviews, badges, completionEvents, voiceNotesRaw, customFields, taskHistory, webhookQueue] =
-    await Promise.all([
-      db.tasks.toArray(),
-      db.days.toArray(),
-      db.goals.toArray(),
-      db.settings.get('settings'),
-      db.habits.toArray(),
-      db.habitLogs.toArray(),
-      db.templates.toArray(),
-      db.reviews.toArray(),
-      db.badges.toArray(),
-      db.completionEvents.toArray(),
-      db.voiceNotes.toArray(),
-      db.customFields.toArray(),
-      db.taskHistory.toArray(),
-      db.webhookQueue.toArray(),
-    ])
+  const [
+    tasks,
+    days,
+    goals,
+    settings,
+    habits,
+    habitLogs,
+    templates,
+    reviews,
+    badges,
+    completionEvents,
+    voiceNotesRaw,
+    customFields,
+    taskHistory,
+    webhookQueue,
+    completionPhotosRaw,
+  ] = await Promise.all([
+    db.tasks.toArray(),
+    db.days.toArray(),
+    db.goals.toArray(),
+    db.settings.get('settings'),
+    db.habits.toArray(),
+    db.habitLogs.toArray(),
+    db.templates.toArray(),
+    db.reviews.toArray(),
+    db.badges.toArray(),
+    db.completionEvents.toArray(),
+    db.voiceNotes.toArray(),
+    db.customFields.toArray(),
+    db.taskHistory.toArray(),
+    db.webhookQueue.toArray(),
+    db.completionPhotos.toArray(),
+  ])
 
   const voiceNotes: VoiceNoteExport[] = await Promise.all(
     voiceNotesRaw.map(async (v) => ({
@@ -87,8 +113,19 @@ export async function exportData(): Promise<string> {
     })),
   )
 
+  const completionPhotos: CompletionPhotoExport[] = await Promise.all(
+    completionPhotosRaw.map(async (p) => ({
+      id: p.id,
+      taskId: p.taskId,
+      completionEventId: p.completionEventId,
+      blobDataUrl: await blobToDataUrl(p.blob),
+      mimeType: p.blob.type,
+      createdAt: p.createdAt,
+    })),
+  )
+
   const backup: Backup = {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     tasks,
     days,
@@ -104,6 +141,7 @@ export async function exportData(): Promise<string> {
     customFields,
     taskHistory,
     webhookQueue,
+    completionPhotos,
   }
   return JSON.stringify(backup, null, 2)
 }
@@ -133,24 +171,39 @@ const ALL_TABLES = [
   'customFields',
   'taskHistory',
   'webhookQueue',
+  'completionPhotos',
 ] as const
 
 type BackupFile = Omit<Backup, 'version'> & { version: number }
 
 export async function importData(json: string): Promise<void> {
   const backup = JSON.parse(json) as BackupFile
-  if (!backup || (backup.version !== 1 && backup.version !== 2)) {
+  if (!backup || (backup.version !== 1 && backup.version !== 2 && backup.version !== 3)) {
     throw new Error('Unrecognized backup file format')
   }
 
   const voiceNotes =
-    backup.version === 2
+    backup.version >= 2
       ? await Promise.all(
           (backup.voiceNotes ?? []).map(async (v) => ({
             id: v.id,
             taskId: v.taskId,
             blob: await dataUrlToBlob(v.blobDataUrl),
             createdAt: v.createdAt,
+          })),
+        )
+      : []
+
+  const completionPhotos =
+    backup.version >= 3
+      ? await Promise.all(
+          (backup.completionPhotos ?? []).map(async (p) => ({
+            id: p.id,
+            taskId: p.taskId,
+            completionEventId: p.completionEventId,
+            blob: await dataUrlToBlob(p.blobDataUrl),
+            mimeType: p.mimeType,
+            createdAt: p.createdAt,
           })),
         )
       : []
@@ -171,6 +224,7 @@ export async function importData(json: string): Promise<void> {
     await db.customFields.bulkAdd(backup.customFields ?? [])
     await db.taskHistory.bulkAdd(backup.taskHistory ?? [])
     await db.webhookQueue.bulkAdd(backup.webhookQueue ?? [])
+    await db.completionPhotos.bulkAdd(completionPhotos)
   })
 }
 

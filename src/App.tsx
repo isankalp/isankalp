@@ -21,6 +21,7 @@ const Badges = lazy(() => import('./pages/Badges'))
 const PlanningWizard = lazy(() => import('./pages/PlanningWizard'))
 const Insights = lazy(() => import('./pages/Insights'))
 const Heatmap = lazy(() => import('./pages/Heatmap'))
+const TimeBlocking = lazy(() => import('./pages/TimeBlocking'))
 
 function Root() {
   const { settings } = useSettings()
@@ -61,6 +62,14 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<Root />} />
         <Route path="/day/:date" element={<DailyTracker />} />
+        <Route
+          path="/timeblock/:date"
+          element={
+            <Suspense fallback={null}>
+              <TimeBlocking />
+            </Suspense>
+          }
+        />
         <Route path="/goals" element={<Goals />} />
         <Route
           path="/stats"
