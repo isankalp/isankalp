@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { db } from '../db/db'

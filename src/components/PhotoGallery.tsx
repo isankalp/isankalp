@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { photosForTask } from '../lib/photoEvidence'
 import type { CompletionPhoto, Task } from '../db/models'
 

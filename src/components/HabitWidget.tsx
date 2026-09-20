@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useState, type FormEvent } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db } from '../db/db'

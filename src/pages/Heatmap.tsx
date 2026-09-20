@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useState } from 'react'
 import clsx from 'clsx'
 import { db } from '../db/db'

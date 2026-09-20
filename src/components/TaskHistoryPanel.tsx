@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { db, updateTaskTracked } from '../db/db'
 import type { Task } from '../db/models'
 

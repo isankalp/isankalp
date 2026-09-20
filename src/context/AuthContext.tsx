@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { authConfigured, getSupabase, requireSupabase } from '../lib/supabaseClient'
+import { setCloudMode } from '../db/db'
 
 const GENERIC_LOGIN_ERROR = 'Incorrect email or password'
 const EMAIL_FORMAT_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -52,6 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- configured is derived from env vars, fixed for the app's lifetime
   }, [])
+
+  // The app's entire data source flips the instant the session changes: signed out (or accounts not
+  // configured) means local-first IndexedDB, exactly as before v9; signed in means every read/write
+  // goes to this account's cloud tables instead, from any device.
+  useEffect(() => {
+    setCloudMode(session?.user.id ?? null)
+  }, [session])
 
   function isValidEmail(email: string): boolean {
     return EMAIL_FORMAT_RE.test(email.trim())

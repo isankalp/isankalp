@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useState } from 'react'
 import { db } from '../db/db'
 import { MINUTES_HOUR_MILESTONES, STREAK_MILESTONES, badgeLabel } from '../lib/badges'

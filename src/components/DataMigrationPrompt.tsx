@@ -4,15 +4,18 @@ import {
   buildMigrationSummary,
   hasLocalData,
   markMigrationResolved,
+  migrateLocalDataToCloud,
   migrationResolvedForDevice,
-  uploadBackupToAccount,
+  uploadLocalBackupToAccount,
   type MigrationSummary,
 } from '../lib/dataMigration'
 
 type Status = 'checking' | 'hidden' | 'prompt' | 'uploading' | 'error' | 'done'
 
-/** Epic 52, scoped: offers to back up existing local data to the account as one importable file,
- *  rather than a full relational re-sync (out of scope for this pass — see PR notes). */
+/** Epic 52: offers to bring this device's existing local data into the account. The real move is
+ *  copying every table into the account's cloud tables (so it's visible from any device from then
+ *  on); a JSON backup snapshot is also attached to the account as a best-effort extra safety net,
+ *  but its failure alone never blocks the migration from completing. */
 export default function DataMigrationPrompt() {
   const { user } = useAuth()
   const [status, setStatus] = useState<Status>('checking')
@@ -47,7 +50,8 @@ export default function DataMigrationPrompt() {
   async function handleImport() {
     setStatus('uploading')
     try {
-      await uploadBackupToAccount(user!.id)
+      await migrateLocalDataToCloud()
+      await uploadLocalBackupToAccount(user!.id).catch(() => undefined)
       markMigrationResolved(user!.id)
       setStatus('done')
     } catch {

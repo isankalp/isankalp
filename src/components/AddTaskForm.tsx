@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { v4 as uuid } from 'uuid'
 import { db, getOrCreateDay } from '../db/db'
 import { PRIORITIES, UNIT_TYPES, isCustomUnitValid, unitLabel, type Priority, type UnitType } from '../db/models'

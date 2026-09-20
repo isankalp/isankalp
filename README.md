@@ -42,13 +42,14 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
 - **Bulk Task Operations** — multi-select tasks on a day to move, duplicate (reset to 0 progress), tag, or delete them together; bulk delete requires a count-specific confirmation and is undoable.
 - **Time-Blocking view** — drag tasks from an Unscheduled sidebar onto an hourly grid, resize/reposition blocks with 15-minute snapping, and see overlapping blocks flagged and laid out side by side so every block stays clickable.
 - **Accounts** *(optional, needs setup — see below)* — real Sign Up / Log In (email+password or Google), password reset by email, changing your email or password from Settings, and an unverified-email banner that never blocks task tracking. Entirely hidden when no backend is configured, so the app stays fully local-first by default.
-- **Local-to-account migration** — the first time you log in on a device with existing local data, you're offered a one-time backup upload of everything (same format as Export All Data) to your account before continuing; your on-device data is never touched or deleted by this.
+- **Cloud data sync** *(optional, needs setup — see below)* — once logged in, every module (tasks, goals, habits, templates, reviews, badges, custom fields, photos, voice notes, time-blocking, everything) reads and writes to your account instead of this browser's local storage, so your data follows you to any device you log into, live (changes on one device/tab show up on another without a refresh). Logged out — or accounts not configured at all — the app is exactly the local-first, single-device experience it always was. Requires a network connection while logged in; there's no offline mode for the cloud-synced state.
+- **Local-to-account migration** — the first time you log in on a device with existing local data, you're offered a one-time import that copies everything into your account (so it becomes part of your cloud data from then on), plus a JSON backup snapshot attached to the account as an extra safety net. Your on-device data is never deleted or altered by this either way.
 
 ## Skipped this round
 
 Some requested features need a real backend, multi-user accounts, or a native app this project doesn't have, and were skipped rather than faked: public/shared profiles or leaderboards, a template marketplace, community challenges, a mentor/coach dashboard, health-app sync, notification-digest emails, and smartwatch companions. Each was scoped out explicitly rather than half-built.
 
-Accounts are the one exception — real Sign Up/Log In/password reset/session management now exist, backed by [Supabase](https://supabase.com) (see **Accounts setup** below). The local-to-account migration is scoped down from a full relational sync to a single backup-file upload: your local data is never deleted, converted, or merged automatically. Login lockout after repeated failures is enforced client-side only (a real server-side rate limit isn't something a static SPA can add on its own) — an honest limitation, not a security guarantee.
+Accounts are the one exception — real Sign Up/Log In/password reset/session management, and now full cloud data sync across every module, backed by [Supabase](https://supabase.com) (see **Accounts setup** below). Login lockout after repeated failures is enforced client-side only (a real server-side rate limit isn't something a static SPA can add on its own) — an honest limitation, not a security guarantee. The cloud-synced state also has no offline mode: every read/write goes straight to your account, so it needs a live network connection while you're logged in (local-first, offline-capable behavior is exactly what you get logged out).
 
 ## Data model
 
@@ -72,10 +73,13 @@ Data lives entirely in the browser's IndexedDB. Use Settings → Export/Import t
 
 ## Accounts setup (optional)
 
-Sign Up / Log In / password reset are hidden entirely until configured — nothing else in the app changes if you skip this section.
+Sign Up / Log In / password reset / cloud sync are hidden entirely until configured — nothing else in the app changes if you skip this section.
 
 1. Copy `.env.example` to `.env.local` and create a free project at [supabase.com](https://supabase.com).
 2. Fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from Project Settings → API.
-3. For "Continue with Google", create an OAuth client in Google Cloud Console (same one used for Calendar sync works), then enable the Google provider under Supabase → Authentication → Providers and add that client's ID/secret there.
-4. For the local-to-account data migration's backup upload, create a Storage bucket named `account-backups` in your Supabase project, with a policy that lets an authenticated user read/write only paths under their own `auth.uid()`.
-5. Set the same env vars on your host (e.g. Vercel → Project Settings → Environment Variables) for deploys.
+3. Run `supabase/schema.sql` once in your project's SQL Editor (Dashboard → SQL Editor → New query, paste, run). This creates the one table every account's data lives in once logged in, with row-level security so each account only ever sees its own rows, and turns on Realtime so changes sync live across devices/tabs.
+4. For "Continue with Google", create an OAuth client in Google Cloud Console (same one used for Calendar sync works), then enable the Google provider under Supabase → Authentication → Providers and add that client's ID/secret there.
+5. For the local-to-account migration's backup-snapshot safety net, create a Storage bucket named `account-backups` in your Supabase project, with a policy that lets an authenticated user read/write only paths under their own `auth.uid()`.
+6. Set the same env vars on your host (e.g. Vercel → Project Settings → Environment Variables) for deploys.
+
+**Architecture note**: every local table (tasks, days, goals, habits, ...) maps onto one generic `records` table in Postgres (`user_id`, `table_name`, `id`, `data jsonb`), rather than one SQL table per model. This means the schema never needs to change when a model gains a field, at the cost of losing native per-column SQL querying — acceptable for this app's per-user, personal-scale data. Voice notes and completion photos (which hold raw binary `Blob`s locally) are stored as inline base64 data URLs in that same `data` column rather than a separate object-storage upload, again trading some payload size for one simple, consistent code path.

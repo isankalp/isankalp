@@ -1,6 +1,9 @@
 import Dexie, { type Table } from 'dexie'
 import { v4 as uuid } from 'uuid'
 import { dbNameForProfile, getActiveProfileId } from '../lib/profiles'
+import { wrapLocalTable } from './localTableWrapper'
+import { getCloudTable, setCloudUserId } from './cloudTable'
+import { emitDbChange } from './dbEvents'
 import {
   DEFAULT_SETTINGS,
   type Badge,
@@ -19,6 +22,26 @@ import {
   type VoiceNote,
   type WebhookQueueItem,
 } from './models'
+
+export const ALL_TABLE_NAMES = [
+  'tasks',
+  'days',
+  'goals',
+  'settings',
+  'habits',
+  'habitLogs',
+  'templates',
+  'reviews',
+  'badges',
+  'completionEvents',
+  'voiceNotes',
+  'customFields',
+  'taskHistory',
+  'webhookQueue',
+  'completionPhotos',
+] as const
+
+export type TableName = (typeof ALL_TABLE_NAMES)[number]
 
 export class GoalsDB extends Dexie {
   tasks!: Table<Task, string>
@@ -140,7 +163,81 @@ export class GoalsDB extends Dexie {
   }
 }
 
-export const db = new GoalsDB(dbNameForProfile(getActiveProfileId()))
+const localDb = new GoalsDB(dbNameForProfile(getActiveProfileId()))
+
+const wrappedLocalTables = new Map<TableName, Table<unknown, string>>(
+  ALL_TABLE_NAMES.map((name) => [name, wrapLocalTable(localDb[name] as Table<unknown, string>)]),
+)
+
+/** null = local-first (default, unauthenticated or accounts not configured); a user id = cloud mode. */
+let activeUserId: string | null = null
+
+export function isCloudMode(): boolean {
+  return activeUserId !== null
+}
+
+/**
+ * Called by AuthContext whenever the session changes. Flips every table this app reads/writes
+ * through between the local Dexie database and the signed-in user's Supabase-backed cloud tables,
+ * and notifies every mounted useLiveQuery so the UI refetches immediately against the new backend.
+ */
+export function setCloudMode(userId: string | null): void {
+  if (activeUserId === userId) return
+  activeUserId = userId
+  setCloudUserId(userId)
+  emitDbChange()
+}
+
+function getTable(name: TableName): Table<unknown, string> {
+  if (activeUserId) return getCloudTable(name) as unknown as Table<unknown, string>
+  const table = wrappedLocalTables.get(name)
+  if (!table) throw new Error(`Unknown table: ${name}`)
+  return table
+}
+
+/**
+ * Always this device's local Dexie table, regardless of the currently active mode. Used by the
+ * local-to-account migration, which by definition needs to read local data even while already
+ * logged in (and therefore in cloud mode) so it knows what to push up.
+ */
+export function localTable<T = unknown>(name: TableName): Table<T, string> {
+  const table = wrappedLocalTables.get(name)
+  if (!table) throw new Error(`Unknown table: ${name}`)
+  return table as unknown as Table<T, string>
+}
+
+/** Always the signed-in user's cloud table for `name`, regardless of the currently active mode. */
+export function cloudTable<T = unknown>(name: TableName): Table<T, string> {
+  return getCloudTable(name) as unknown as Table<T, string>
+}
+
+async function transaction<T>(_mode: 'rw', _tables: unknown, callback: () => Promise<T>): Promise<T> {
+  if (!activeUserId) {
+    // Local mode: use a real Dexie transaction across every local table for atomicity, exactly as before.
+    return localDb.transaction('rw', localDb.tables, callback)
+  }
+  // Cloud mode: Postgrest has no client-side multi-statement transaction. Writes happen sequentially;
+  // a mid-sequence failure can leave a partial result, same risk profile as any non-transactional REST API.
+  const result = await callback()
+  emitDbChange()
+  return result
+}
+
+const dbHandler: ProxyHandler<Record<string, never>> = {
+  get(_target, prop) {
+    if (prop === 'transaction') return transaction
+    if (prop === 'tables') return ALL_TABLE_NAMES.map((name) => getTable(name))
+    if (prop === 'table') return (name: string) => getTable(name as TableName)
+    if (typeof prop === 'string' && (ALL_TABLE_NAMES as readonly string[]).includes(prop)) {
+      return getTable(prop as TableName)
+    }
+    return undefined
+  },
+}
+
+/** The active data source — local Dexie by default, or the signed-in user's cloud tables once
+ *  setCloudMode() is called. Every module in this app reads/writes through this single object. */
+export const db = new Proxy({} as Record<string, never>, dbHandler) as unknown as GoalsDB
 
 /** Returns today's Day (YYYY-MM-DD, local time), creating it if it doesn't exist yet. */
 export async function getOrCreateDay(date: string): Promise<Day> {

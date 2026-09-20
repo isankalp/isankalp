@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useEffect } from 'react'
 import { db } from '../db/db'
 import { badgeLabel } from '../lib/badges'

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { db } from '../db/db'
 import ImportCsvModal from '../components/ImportCsvModal'
 import CustomFieldsSettings from '../components/CustomFieldsSettings'
 import AccountSettings from '../components/AccountSettings'
+import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { downloadExport, exportData, importData, wipeAllData } from '../lib/exportImport'
 import { useT } from '../lib/i18n'
@@ -67,6 +68,7 @@ function SegmentedControl<T extends string>({
 
 export default function Settings() {
   const { settings, updateSettings } = useSettings()
+  const { user } = useAuth()
   const t = useT()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -700,7 +702,11 @@ export default function Settings() {
         </SettingRow>
         <SettingRow
           label="Delete all my data"
-          hint="Permanently erases everything in this browser for this profile. There's no account or server copy to also remove — this app only ever stores data locally."
+          hint={
+            user
+              ? "Permanently erases everything in your account's cloud storage. This is the data every device syncs from — there's no separate local-only copy while you're logged in."
+              : "Permanently erases everything in this browser for this profile. There's no account or server copy to also remove — this app only ever stores data locally."
+          }
         >
           <button
             type="button"

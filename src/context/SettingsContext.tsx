@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { createContext, useContext, useEffect, type ReactNode } from 'react'
 import { db } from '../db/db'
 import { DEFAULT_SETTINGS, type Settings } from '../db/models'

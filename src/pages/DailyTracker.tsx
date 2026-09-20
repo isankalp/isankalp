@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AddTaskForm, { type AddTaskPrefill } from '../components/AddTaskForm'

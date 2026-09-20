@@ -1,4 +1,5 @@
-import { db } from '../db/db'
+import { db, ALL_TABLE_NAMES } from '../db/db'
+import { blobToDataUrl, dataUrlToBlob } from './blobUtils'
 import type {
   Badge,
   CompletionEvent,
@@ -51,20 +52,6 @@ interface Backup {
   taskHistory: TaskHistoryEntry[]
   webhookQueue: WebhookQueueItem[]
   completionPhotos: CompletionPhotoExport[]
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(blob)
-  })
-}
-
-async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
-  const res = await fetch(dataUrl)
-  return res.blob()
 }
 
 /** DC-1: a complete, machine-readable export of every task, goal, note, and setting — every table in the database. */
@@ -156,24 +143,6 @@ export function downloadExport(json: string) {
   URL.revokeObjectURL(url)
 }
 
-const ALL_TABLES = [
-  'tasks',
-  'days',
-  'goals',
-  'settings',
-  'habits',
-  'habitLogs',
-  'templates',
-  'reviews',
-  'badges',
-  'completionEvents',
-  'voiceNotes',
-  'customFields',
-  'taskHistory',
-  'webhookQueue',
-  'completionPhotos',
-] as const
-
 type BackupFile = Omit<Backup, 'version'> & { version: number }
 
 export async function importData(json: string): Promise<void> {
@@ -209,7 +178,7 @@ export async function importData(json: string): Promise<void> {
       : []
 
   await db.transaction('rw', db.tables, async () => {
-    await Promise.all(ALL_TABLES.map((name) => db.table(name).clear()))
+    await Promise.all(ALL_TABLE_NAMES.map((name) => db.table(name).clear()))
     await db.days.bulkAdd(backup.days ?? [])
     await db.tasks.bulkAdd(backup.tasks ?? [])
     await db.goals.bulkAdd(backup.goals ?? [])
@@ -229,13 +198,13 @@ export async function importData(json: string): Promise<void> {
 }
 
 /**
- * DC-2 scoped to a backend-less, local-first app: irreversibly clears every table in this profile's
- * database. There is no "account" or server/sync copy to also purge — honestly, this only ever
- * affects this browser's local storage for the active profile.
+ * DC-2: irreversibly clears every table in whichever store is currently active — this browser's
+ * local storage for the active profile when logged out, or the signed-in account's cloud data
+ * (the source every device syncs from) when logged in. Never both at once.
  */
 export async function wipeAllData(): Promise<void> {
   await db.transaction('rw', db.tables, async () => {
-    await Promise.all(ALL_TABLES.map((name) => db.table(name).clear()))
+    await Promise.all(ALL_TABLE_NAMES.map((name) => db.table(name).clear()))
   })
   try {
     localStorage.removeItem('goals-tracker:onboarded')
