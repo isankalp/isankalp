@@ -259,6 +259,12 @@ export class CloudTable<T extends Record<string, unknown>> {
     return (await fetchOneRow(this.tableName, id)) as T | undefined
   }
 
+  /** Dexie's Table exposes this directly (equivalent to `.toCollection().toArray()`), and it's the
+   *  most common way this app reads a whole table — not just via `.where()`/`.orderBy()`/`.filter()`. */
+  toArray(): Promise<T[]> {
+    return this.all()
+  }
+
   async add(record: T): Promise<string> {
     const id = record.id as string
     await insertRow(this.tableName, id, record)

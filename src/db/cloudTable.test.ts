@@ -151,6 +151,15 @@ describe('CloudTable', () => {
     expect(await tasks.get('t1')).toEqual({ id: 't1', dayId: 'd1', title: 'Read', createdAt: 1 })
   })
 
+  it('toArray() returns every row in the table without needing where()/orderBy()/filter()', async () => {
+    const tasks = getCloudTable<FakeTask>('tasks')
+    await tasks.bulkAdd([
+      { id: 't1', dayId: 'd1', title: 'A', createdAt: 1 },
+      { id: 't2', dayId: 'd2', title: 'B', createdAt: 2 },
+    ])
+    expect((await tasks.toArray()).map((t) => t.id).sort()).toEqual(['t1', 't2'])
+  })
+
   it('rejects adding a duplicate id', async () => {
     const tasks = getCloudTable<FakeTask>('tasks')
     await tasks.add({ id: 't1', dayId: 'd1', title: 'Read', createdAt: 1 })
