@@ -2,12 +2,24 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLiveQuery } from '../hooks/useLiveQuery'
 import { v4 as uuid } from 'uuid'
 import { db, getOrCreateDay } from '../db/db'
-import { PRIORITIES, UNIT_TYPES, isCustomUnitValid, unitLabel, type Priority, type UnitType } from '../db/models'
+import { PRIORITIES, UNIT_TYPES, isCustomUnitValid, unitLabel, type Priority, type TaskCategory, type UnitType } from '../db/models'
 import { useT } from '../lib/i18n'
 import { useSettings } from '../context/SettingsContext'
+import { useAiClient } from '../hooks/useAiClient'
 import { capacityPercent, checkCapacity, isCapacityEnabled } from '../lib/capacity'
 import { addDays } from '../lib/date'
 import { weekStart } from '../lib/aggregate'
+
+const AUTO_TAG_TOOL_SCHEMA = {
+  type: 'object',
+  properties: {
+    label: {
+      type: ['string', 'null'],
+      description: 'The best-matching category label from the history provided, or null if nothing matches well',
+    },
+  },
+  required: ['label'],
+}
 
 export interface AddTaskPrefill {
   title: string
@@ -42,9 +54,11 @@ export default function AddTaskForm({
   const [day, setDay] = useState(defaultDate)
   const [error, setError] = useState<string | null>(prefill ? "Couldn't parse that — fill in manually" : null)
   const [suggested, setSuggested] = useState(false)
+  const [suggestedCategory, setSuggestedCategory] = useState<TaskCategory | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const t = useT()
   const { settings } = useSettings()
+  const { configured: aiConfigured, structured } = useAiClient()
 
   useEffect(() => {
     if (prefill) titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -79,6 +93,30 @@ export default function AddTaskForm({
     const avg = recent.reduce((s, t) => s + t.minutesPerSubtask, 0) / recent.length
     setMinutesPerSubtask(String(Math.round(avg * 10) / 10))
     setSuggested(true)
+  }
+
+  /** QC-5: suggests a tag from the user's own tagging history when a new task's title looks similar
+   *  to previously-tagged ones. QC-6: purely a pre-selected suggestion — dismissible, and only ever
+   *  saved if it's still set when the form submits. */
+  async function handleTitleBlur() {
+    if (!aiConfigured || !settings.autoTaggingEnabled || suggestedCategory || !title.trim()) return
+    const tagged = await db.tasks.filter((task) => !!task.category).toArray()
+    if (tagged.length === 0) return
+    const history = tagged
+      .slice(-50)
+      .map((task) => `"${task.title}" -> ${task.category!.label}`)
+      .join('\n')
+    const result = await structured<{ label: string | null }>({
+      system:
+        "You are matching a new task's title against a user's own history of task-title-to-category-label pairs, to suggest a tag consistent with their own past choices. Only suggest a label that already appears in the history — never invent a new one. Return null if nothing matches well.",
+      messages: [{ role: 'user', content: `History:\n${history}\n\nNew task title: "${title.trim()}"` }],
+      toolName: 'suggest_tag',
+      toolDescription: "Suggest a category label for the new task from the user's own history, or null.",
+      inputSchema: AUTO_TAG_TOOL_SCHEMA,
+    })
+    if (!result.ok || !result.data.label) return
+    const match = tagged.find((task) => task.category!.label === result.data.label)
+    if (match?.category) setSuggestedCategory(match.category)
   }
 
   function readValidatedFields(): { minutes: number; total: number } | null {
@@ -117,6 +155,7 @@ export default function AddTaskForm({
       priority,
       unit,
       customUnitLabel: unit === 'custom' ? customUnitLabel.trim() : undefined,
+      category: suggestedCategory ?? undefined,
       createdAt: now,
       updatedAt: now,
     })
@@ -126,6 +165,7 @@ export default function AddTaskForm({
     setTotalSubtasks('')
     setPriority('Medium')
     setDay(defaultDate)
+    setSuggestedCategory(null)
   }
 
   async function handleSaveAsTemplate() {
@@ -155,7 +195,11 @@ export default function AddTaskForm({
           type="text"
           placeholder={t('Task title (e.g. Solve DSA questions)')}
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            setTitle(e.target.value)
+            setSuggestedCategory(null)
+          }}
+          onBlur={handleTitleBlur}
           maxLength={120}
           className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs sm:col-span-1"
         />
@@ -234,6 +278,25 @@ export default function AddTaskForm({
           </span>
         )}
       </div>
+      {suggestedCategory && (
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="text-slate-500 dark:text-slate-400">✨ Suggested tag:</span>
+          <span
+            className="px-1.5 py-0.5 rounded-full text-white flex items-center gap-1"
+            style={{ backgroundColor: suggestedCategory.color }}
+          >
+            {suggestedCategory.icon} {suggestedCategory.label}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSuggestedCategory(null)}
+            aria-label="Remove suggested tag"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {capacityCheck?.overBudget && (
         <p className="text-[11px] text-amber-600 dark:text-amber-400" role="status">
           ⚠ This would put {settings.capacityMode === 'daily' ? 'today' : 'this week'} at {capacityCheck.totalAfter}/{capacityCheck.budget} min (

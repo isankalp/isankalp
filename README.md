@@ -44,12 +44,20 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
 - **Accounts** *(optional, needs setup — see below)* — real Sign Up / Log In (email+password or Google), password reset by email, changing your email or password from Settings, and an unverified-email banner that never blocks task tracking. Entirely hidden when no backend is configured, so the app stays fully local-first by default.
 - **Cloud data sync** *(optional, needs setup — see below)* — once logged in, every module (tasks, goals, habits, templates, reviews, badges, custom fields, photos, voice notes, time-blocking, everything) reads and writes to your account instead of this browser's local storage, so your data follows you to any device you log into, live (changes on one device/tab show up on another without a refresh). Logged out — or accounts not configured at all — the app is exactly the local-first, single-device experience it always was. Requires a network connection while logged in; there's no offline mode for the cloud-synced state.
 - **Local-to-account migration** — the first time you log in on a device with existing local data, you're offered a one-time import that copies everything into your account (so it becomes part of your cloud data from then on), plus a JSON backup snapshot attached to the account as an extra safety net. Your on-device data is never deleted or altered by this either way.
+- **AI features** *(optional, needs your own Claude API key — see below)* — invisible everywhere until a key is added in Settings → AI:
+  - **AI Goal Breakdown** — describe a goal in plain language, or upload a syllabus/reading-list PDF, and get a proposed, fully editable task list (with a non-blocking pace-feasibility check against your own history) — nothing saves until you confirm.
+  - **AI-Powered Quick Capture** — an AI fallback for Quick-Add phrasing the built-in parser can't handle, a free-form command bar ("move all my reading tasks this week to Friday") that always shows an exact preview before executing, and AI tag suggestions on new tasks (always overridable, never silently saved).
+  - **AI Recaps & Diagnosis** — a narrative weekly recap and a streak-break diagnosis, each grounded strictly in your own logged numbers — every figure the AI states is checked against the real data it was given, and the response is discarded (never shown) if it states anything that doesn't match.
+  - **Ask AI** — a chat panel over your own task/journal history, every answer citing the specific dates it drew from (tap through to the day), explicitly saying so rather than guessing when something isn't in your history.
+  - **Journal & Journal Coaching** — a simple daily journal entry, plus a tone-calibrated coaching note and recurring-theme surfacing once you have enough entries — both read only what you actually wrote, never inferring an unstated mood. Independently toggleable off in Settings → AI even with AI otherwise enabled.
 
 ## Skipped this round
 
 Some requested features need a real backend, multi-user accounts, or a native app this project doesn't have, and were skipped rather than faked: public/shared profiles or leaderboards, a template marketplace, community challenges, a mentor/coach dashboard, health-app sync, notification-digest emails, and smartwatch companions. Each was scoped out explicitly rather than half-built.
 
-Accounts are the one exception — real Sign Up/Log In/password reset/session management, and now full cloud data sync across every module, backed by [Supabase](https://supabase.com) (see **Accounts setup** below). Login lockout after repeated failures is enforced client-side only (a real server-side rate limit isn't something a static SPA can add on its own) — an honest limitation, not a security guarantee. The cloud-synced state also has no offline mode: every read/write goes straight to your account, so it needs a live network connection while you're logged in (local-first, offline-capable behavior is exactly what you get logged out).
+Accounts are one exception — real Sign Up/Log In/password reset/session management, and now full cloud data sync across every module, backed by [Supabase](https://supabase.com) (see **Accounts setup** below). Login lockout after repeated failures is enforced client-side only (a real server-side rate limit isn't something a static SPA can add on its own) — an honest limitation, not a security guarantee. The cloud-synced state also has no offline mode: every read/write goes straight to your account, so it needs a live network connection while you're logged in (local-first, offline-capable behavior is exactly what you get logged out).
+
+AI features are the other exception — real Claude API calls (see **AI setup** below), bring-your-own-key. "Grounded in your own data" is enforced as best it can be from the client: every number an AI recap/diagnosis states is checked against the real figures it was given and discarded if it doesn't match, and Q&A/breakdown prompts only ever see the specific data assembled for that request — but an LLM's output still can't be *guaranteed* perfectly grounded the way a database query can, so treat AI-stated figures as a best-effort summary of your real data, not the source of truth (that's always Stats/Calendar). The AI request-usage counter in Settings is this app's own count, not a verified read of your Anthropic billing dashboard, since there's no browser-safe API for that.
 
 ## Data model
 
@@ -57,7 +65,7 @@ Accounts are the one exception — real Sign Up/Log In/password reset/session ma
 
 ## Stack
 
-React + TypeScript + Vite + Tailwind CSS v4, local-first persistence via IndexedDB ([Dexie.js](https://dexie.org/)) — no backend required for task tracking. Charts via [Recharts](https://recharts.org/). Client-side routing via React Router. Accounts (optional) are backed by [Supabase](https://supabase.com) (`@supabase/supabase-js`), loaded on demand so it adds nothing to the bundle when unconfigured.
+React + TypeScript + Vite + Tailwind CSS v4, local-first persistence via IndexedDB ([Dexie.js](https://dexie.org/)) — no backend required for task tracking. Charts via [Recharts](https://recharts.org/). Client-side routing via React Router. Accounts (optional) are backed by [Supabase](https://supabase.com) (`@supabase/supabase-js`), loaded on demand so it adds nothing to the bundle when unconfigured. AI features (optional) call the Claude API directly from the browser with your own key — no extra dependency, no server of this app's own involved.
 
 ## Development
 
@@ -83,3 +91,13 @@ Sign Up / Log In / password reset / cloud sync are hidden entirely until configu
 6. Set the same env vars on your host (e.g. Vercel → Project Settings → Environment Variables) for deploys.
 
 **Architecture note**: every local table (tasks, days, goals, habits, ...) maps onto one generic `records` table in Postgres (`user_id`, `table_name`, `id`, `data jsonb`), rather than one SQL table per model. This means the schema never needs to change when a model gains a field, at the cost of losing native per-column SQL querying — acceptable for this app's per-user, personal-scale data. Voice notes and completion photos (which hold raw binary `Blob`s locally) are stored as inline base64 data URLs in that same `data` column rather than a separate object-storage upload, again trading some payload size for one simple, consistent code path.
+
+## AI setup (optional)
+
+Every AI feature is hidden entirely until configured — nothing else in the app changes if you skip this section.
+
+1. Get a Claude API key from [console.anthropic.com](https://console.anthropic.com).
+2. In the app, go to Settings → AI, paste the key, and save (it's validated with a live request before being stored).
+3. That's it — Break Down with AI, the free-form command bar, AI Quick-Add, AI recaps/diagnosis, Ask AI, and Journal Coaching all become available immediately.
+
+**Architecture note**: the key is stored the same way as the rest of your settings — locally in this browser, or synced to your account's cloud data if you're also logged in (Epic 58/AK-1's "stored securely" means RLS-protected like your other cloud data when logged in, or browser-local storage otherwise — there's no separate encryption layer beyond that). It's used directly from the browser via `fetch()` to `https://api.anthropic.com`, using Anthropic's own documented `anthropic-dangerous-direct-browser-access` header for exactly this bring-your-own-key pattern — never sent to, or proxied through, any server of this app's own. It's masked (e.g. `sk-ant...ab12`) in the UI after saving and never shown in full again; use Replace/Remove Key in Settings to change or clear it.

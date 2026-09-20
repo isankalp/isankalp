@@ -14,6 +14,7 @@ import {
   type Goal,
   type Habit,
   type HabitLog,
+  type JournalEntry,
   type Review,
   type Settings,
   type Task,
@@ -39,6 +40,7 @@ export const ALL_TABLE_NAMES = [
   'taskHistory',
   'webhookQueue',
   'completionPhotos',
+  'journalEntries',
 ] as const
 
 export type TableName = (typeof ALL_TABLE_NAMES)[number]
@@ -59,6 +61,7 @@ export class GoalsDB extends Dexie {
   taskHistory!: Table<TaskHistoryEntry, string>
   webhookQueue!: Table<WebhookQueueItem, string>
   completionPhotos!: Table<CompletionPhoto, string>
+  journalEntries!: Table<JournalEntry, string>
 
   constructor(name: string) {
     super(name)
@@ -160,6 +163,38 @@ export class GoalsDB extends Dexie {
       webhookQueue: 'id, createdAt',
       completionPhotos: 'id, taskId, completionEventId, createdAt',
     })
+    this.version(7)
+      .stores({
+        tasks: 'id, dayId, title, createdAt, templateId, dependsOnTaskId',
+        days: 'id, &date',
+        goals: 'id, title, archivedAt',
+        settings: 'id',
+        habits: 'id, archivedAt',
+        habitLogs: 'id, habitId, date, &[habitId+date]',
+        templates: 'id, archivedAt',
+        reviews: 'id, periodType, periodKey',
+        badges: 'id, type',
+        completionEvents: 'id, taskId, at',
+        voiceNotes: 'id, taskId, createdAt',
+        customFields: 'id, name',
+        taskHistory: 'id, taskId, at',
+        webhookQueue: 'id, createdAt',
+        completionPhotos: 'id, taskId, completionEventId, createdAt',
+        journalEntries: 'id, &date',
+      })
+      .upgrade(async (tx) => {
+        // AK-5/JC-5: every pre-existing Settings row defaults to no AI usage yet and journal
+        // analysis on (matching a fresh install), with no re-entry needed.
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((settings) => {
+            if (settings.aiRequestCount === undefined) settings.aiRequestCount = 0
+            if (settings.aiRequestCountSince === undefined) settings.aiRequestCountSince = Date.now()
+            if (settings.journalAnalysisEnabled === undefined) settings.journalAnalysisEnabled = true
+            if (settings.autoTaggingEnabled === undefined) settings.autoTaggingEnabled = true
+          })
+      })
   }
 }
 

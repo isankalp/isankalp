@@ -8,6 +8,7 @@ import KeyboardShortcuts from './KeyboardShortcuts'
 import ProfileSwitcher from './ProfileSwitcher'
 import UndoBanner from './UndoBanner'
 import UnverifiedEmailBanner from './UnverifiedEmailBanner'
+import { useAiClient } from '../hooks/useAiClient'
 
 const links = [
   { to: `/day/${todayKey()}`, label: 'Today', match: '/day' },
@@ -25,6 +26,10 @@ const links = [
 export default function Layout() {
   const location = useLocation()
   const t = useT()
+  const { configured: aiConfigured } = useAiClient()
+  const visibleLinks = aiConfigured
+    ? [...links, { to: '/ask', label: 'Ask AI', match: '/ask' }, { to: '/journal', label: 'Journal', match: '/journal' }]
+    : links
   return (
     <div className="min-h-svh flex flex-col">
       <header className="border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur z-10">
@@ -36,7 +41,7 @@ export default function Layout() {
           </div>
         </div>
         <nav className="max-w-4xl mx-auto px-4 pb-2.5 pt-1.5 flex gap-1 overflow-x-auto">
-          {links.map((link) => (
+          {visibleLinks.map((link) => (
             <NavLink
               key={link.match}
               to={link.to}

@@ -25,6 +25,8 @@ const PlanningWizard = lazy(() => import('./pages/PlanningWizard'))
 const Insights = lazy(() => import('./pages/Insights'))
 const Heatmap = lazy(() => import('./pages/Heatmap'))
 const TimeBlocking = lazy(() => import('./pages/TimeBlocking'))
+const Ask = lazy(() => import('./pages/Ask'))
+const JournalInsights = lazy(() => import('./pages/JournalInsights'))
 
 function Root() {
   const { settings } = useSettings()
@@ -130,6 +132,22 @@ export default function App() {
           element={
             <Suspense fallback={null}>
               <Heatmap />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/ask"
+          element={
+            <Suspense fallback={null}>
+              <Ask />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/journal"
+          element={
+            <Suspense fallback={null}>
+              <JournalInsights />
             </Suspense>
           }
         />

@@ -2,7 +2,9 @@ import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useState, type FormEvent, type KeyboardEvent } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db } from '../db/db'
+import AIGoalBreakdown from '../components/AIGoalBreakdown'
 import TemplateLibrary from '../components/TemplateLibrary'
+import { useAiClient } from '../hooks/useAiClient'
 import { minutesDone as taskMinutesDone, totalMinutes as taskTotalMinutes, type Goal } from '../db/models'
 
 function blurOnEnter(e: KeyboardEvent<HTMLInputElement>) {
@@ -125,12 +127,14 @@ export default function Goals() {
   const allGoals = useLiveQuery(() => db.goals.toArray(), []) ?? []
   const allTasks = useLiveQuery(() => db.tasks.toArray(), []) ?? []
   const allTaskTitles = [...new Set(allTasks.map((t) => t.title))].sort()
+  const { configured: aiConfigured } = useAiClient()
 
   const [title, setTitle] = useState('')
   const [targetDate, setTargetDate] = useState('')
   const [selectedTitles, setSelectedTitles] = useState<string[]>([])
   const [tab, setTab] = useState<'active' | 'archived'>('active')
   const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false)
+  const [aiBreakdownOpen, setAiBreakdownOpen] = useState(false)
 
   const goals = allGoals.filter((g) => (tab === 'active' ? !g.archivedAt : !!g.archivedAt))
 
@@ -158,6 +162,15 @@ export default function Goals() {
       <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h2 className="text-lg font-bold">Goals</h2>
         <div className="flex items-center gap-2">
+          {aiConfigured && (
+            <button
+              type="button"
+              onClick={() => setAiBreakdownOpen(true)}
+              className="text-xs px-2.5 py-1 rounded-md bg-indigo-600 text-white font-medium hover:bg-indigo-700"
+            >
+              ✨ Break Down with AI
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setTemplateLibraryOpen(true)}
@@ -183,6 +196,7 @@ export default function Goals() {
       </div>
 
       {templateLibraryOpen && <TemplateLibrary onClose={() => setTemplateLibraryOpen(false)} />}
+      {aiBreakdownOpen && <AIGoalBreakdown onClose={() => setAiBreakdownOpen(false)} />}
 
       {tab === 'active' && (
         <form

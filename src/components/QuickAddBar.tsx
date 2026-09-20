@@ -1,8 +1,19 @@
 import { useState } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db, getOrCreateDay } from '../db/db'
+import { useAiClient } from '../hooks/useAiClient'
 import { parseQuickAdd, type ParsedQuickAdd } from '../lib/quickAddParser'
 import { recognizeSpeech, speechRecognitionSupported } from '../lib/speechInput'
+
+const QUICK_ADD_TOOL_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', description: 'The task title, cleaned up (no unit/quantity words)' },
+    minutesPerSubtask: { type: 'number', description: 'Minutes (or the stated unit amount) per single subtask' },
+    totalSubtasks: { type: 'number', description: 'Total number of subtasks' },
+  },
+  required: ['title', 'minutesPerSubtask', 'totalSubtasks'],
+}
 
 export interface QuickAddPrefill {
   title: string
@@ -11,15 +22,21 @@ export interface QuickAddPrefill {
 }
 
 export default function QuickAddBar({ date, onManualFallback }: { date: string; onManualFallback: (prefill: QuickAddPrefill) => void }) {
+  const { configured: aiConfigured, structured } = useAiClient()
   const [text, setText] = useState('')
   const [parsed, setParsed] = useState<ParsedQuickAdd | null>(null)
+  const [aiParsed, setAiParsed] = useState(false)
   const [parseFailed, setParseFailed] = useState(false)
+  const [aiParsing, setAiParsing] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
   const [listening, setListening] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
 
   function handleChange(value: string) {
     setText(value)
     setVoiceError(null)
+    setAiError(null)
+    setAiParsed(false)
     if (!value.trim()) {
       setParsed(null)
       setParseFailed(false)
@@ -33,6 +50,30 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
       setParsed(null)
       setParseFailed(true)
     }
+  }
+
+  /** QC-1: an on-demand upgrade over the pattern-matching parser above for messier phrasing it
+   *  can't handle — still lands in the same review-before-save UI, never saves on its own. */
+  async function handleAiParse() {
+    if (!text.trim()) return
+    setAiParsing(true)
+    setAiError(null)
+    const result = await structured<ParsedQuickAdd>({
+      system:
+        'Extract a single task from the user\'s quick-add text. minutesPerSubtask and totalSubtasks must be positive numbers; if the text gives a total amount and a per-unit rate, divide accordingly. If genuinely no task-like content is present, still make a best-effort guess.',
+      messages: [{ role: 'user', content: text }],
+      toolName: 'extract_task',
+      toolDescription: 'Extract a task title, minutes per subtask, and total subtasks from free text.',
+      inputSchema: QUICK_ADD_TOOL_SCHEMA,
+    })
+    setAiParsing(false)
+    if (!result.ok) {
+      setAiError(result.error.message)
+      return
+    }
+    setParsed(result.data)
+    setAiParsed(true)
+    setParseFailed(false)
   }
 
   async function handleMic() {
@@ -69,6 +110,7 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
     })
     setText('')
     setParsed(null)
+    setAiParsed(false)
     setParseFailed(false)
   }
 
@@ -77,6 +119,7 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
     onManualFallback(result.recognized)
     setText('')
     setParsed(null)
+    setAiParsed(false)
     setParseFailed(false)
   }
 
@@ -106,6 +149,7 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
 
       {parsed && (
         <div className="mt-1.5 flex items-center gap-2 flex-wrap text-xs p-2 rounded-md bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-700">
+          {aiParsed && <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white">✨ AI</span>}
           <span className="px-1.5 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700">{parsed.title}</span>
           <span className="px-1.5 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700">
             {parsed.minutesPerSubtask} min/subtask
@@ -127,13 +171,20 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
       )}
 
       {parseFailed && (
-        <div className="mt-1.5 flex items-center gap-2 text-xs p-2 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300">
+        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-xs p-2 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300">
           <span>Couldn&rsquo;t parse that —</span>
+          {aiConfigured && (
+            <button type="button" onClick={handleAiParse} disabled={aiParsing} className="underline font-medium disabled:opacity-50">
+              {aiParsing ? 'Asking AI…' : 'try with AI'}
+            </button>
+          )}
           <button type="button" onClick={useManualFallback} className="underline font-medium">
             fill in manually
           </button>
         </div>
       )}
+
+      {aiError && <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{aiError}</p>}
 
       {voiceError && <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{voiceError}</p>}
     </div>

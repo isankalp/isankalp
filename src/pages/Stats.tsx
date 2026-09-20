@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { db } from '../db/db'
 import { bucketTotals, breakdownByTitle, dailyTotals, fillMissingDays, trailingWindow, type Period } from '../lib/aggregate'
 import { completedDateKeys, currentStreak, longestStreak } from '../lib/streaks'
+import StreakDiagnosis from '../components/StreakDiagnosis'
 import { addDays, todayKey } from '../lib/date'
 import { useSettings } from '../context/SettingsContext'
 import { unitOf } from '../db/models'
@@ -74,6 +75,8 @@ export default function Stats() {
           <p className="text-xs text-slate-500 dark:text-slate-400">Longest streak (days)</p>
         </div>
       </div>
+
+      <StreakDiagnosis days={days} tasks={tasks} completedDates={completedDates} currentStreak={streak} />
 
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
         <div className="flex items-center justify-between mb-3">

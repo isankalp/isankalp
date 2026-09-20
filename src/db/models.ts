@@ -211,6 +211,17 @@ export interface Settings {
   capacityMode: CapacityMode
   /** Minutes budget for the chosen mode (per day, or per week). Ignored while capacityMode is 'off'. */
   capacityMinutes: number
+  /** BYOK Claude API key (Epic 58, AK-1). Every AI feature is gated on this being set — see aiConfigured(). */
+  aiApiKey?: string
+  /** Self-tracked count of AI requests made since aiRequestCountSince (AK-5) — this app's own count, not a
+   *  verified read of Anthropic's actual billing dashboard, since there's no browser-safe API for that. */
+  aiRequestCount: number
+  aiRequestCountSince: number
+  /** JC-5: independent of the API key being set — lets journal content stay excluded even with AI otherwise on. */
+  journalAnalysisEnabled: boolean
+  /** QC-5/QC-6: gates whether new tasks get AI tag suggestions at all; the suggestions themselves are
+   *  always editable/removable before save regardless of this setting. */
+  autoTaggingEnabled: boolean
 }
 
 export type CapacityMode = 'off' | 'daily' | 'weekly'
@@ -240,6 +251,20 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'en',
   capacityMode: 'off',
   capacityMinutes: 0,
+  aiRequestCount: 0,
+  aiRequestCountSince: Date.now(),
+  journalAnalysisEnabled: true,
+  autoTaggingEnabled: true,
+}
+
+/** A single free-text daily journal entry (Epic 57's prerequisite — never built as its own "v5"
+ *  epic in this app, so it's introduced here as the minimal real feature Journal Coaching needs). */
+export interface JournalEntry {
+  id: string
+  date: string // YYYY-MM-DD
+  text: string
+  createdAt: number
+  updatedAt: number
 }
 
 /** Clamp completedSubtasks into [0, totalSubtasks], rounding to whole units. */

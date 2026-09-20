@@ -7,6 +7,7 @@ import { currentPeriodKey, formatPeriodLabel, isPeriodInProgress, periodRange, r
 import { exportReviewPdf } from '../lib/pdfExport'
 import { isTaskComplete, type ReviewPeriodType } from '../db/models'
 import { todayKey } from '../lib/date'
+import WeeklyRecap from '../components/WeeklyRecap'
 
 function ReviewDetail({ type, periodKey, onBack }: { type: ReviewPeriodType; periodKey: string; onBack: () => void }) {
   const days = useLiveQuery(() => db.days.toArray(), []) ?? []
@@ -67,6 +68,10 @@ function ReviewDetail({ type, periodKey, onBack }: { type: ReviewPeriodType; per
       </div>
 
       <h2 className="text-lg font-bold mb-3">{formatPeriodLabel(type, periodKey)}</h2>
+
+      {type === 'week' && !inProgress && (
+        <WeeklyRecap planned={planned} done={done} tasksCompleted={tasksCompleted} streak={streak} longestStreak={best} dayTotals={totals} />
+      )}
 
       <div className="grid grid-cols-3 gap-2 mb-4">
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-center">

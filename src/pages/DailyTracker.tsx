@@ -3,10 +3,12 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AddTaskForm, { type AddTaskPrefill } from '../components/AddTaskForm'
 import BulkActionToolbar from '../components/BulkActionToolbar'
+import CommandBar from '../components/CommandBar'
 import CompletionFollowUp from '../components/CompletionFollowUp'
 import DayNav from '../components/DayNav'
 import HabitWidget from '../components/HabitWidget'
 import ImportCsvModal from '../components/ImportCsvModal'
+import JournalEntryBox from '../components/JournalEntryBox'
 import QuickAddBar from '../components/QuickAddBar'
 import RolloverPrompt from '../components/RolloverPrompt'
 import TaskRow from '../components/TaskRow'
@@ -21,6 +23,7 @@ import {
   type Task,
 } from '../db/models'
 import { useSettings } from '../context/SettingsContext'
+import { useAiClient } from '../hooks/useAiClient'
 import { addDays, todayKey } from '../lib/date'
 import { weekStart } from '../lib/aggregate'
 import { markWeeklyPlanPrompted, shouldPromptWeeklyPlan } from '../lib/planningWizard'
@@ -30,6 +33,8 @@ export default function DailyTracker() {
   const { date } = useParams<{ date: string }>()
   const activeDate = date ?? todayKey()
   const { settings } = useSettings()
+  const { configured: aiConfigured } = useAiClient()
+  const [commandBarOpen, setCommandBarOpen] = useState(false)
   const [sortPriority, setSortPriority] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
   const [templatesOpen, setTemplatesOpen] = useState(false)
@@ -124,13 +129,33 @@ export default function DailyTracker() {
         </Link>
       </div>
 
-      <QuickAddBar
-        date={activeDate}
-        onManualFallback={(recognized) => {
-          setPrefill(recognized)
-          setPrefillNonce((n) => n + 1)
-        }}
-      />
+      <div className="flex items-start gap-1.5">
+        <div className="flex-1">
+          <QuickAddBar
+            date={activeDate}
+            onManualFallback={(recognized) => {
+              setPrefill(recognized)
+              setPrefillNonce((n) => n + 1)
+            }}
+          />
+        </div>
+        {aiConfigured && (
+          <button
+            type="button"
+            onClick={() => setCommandBarOpen((v) => !v)}
+            aria-label="Free-form command"
+            aria-pressed={commandBarOpen}
+            className={`text-sm px-2 py-2 rounded-lg border ${
+              commandBarOpen
+                ? 'bg-indigo-600 border-indigo-600 text-white'
+                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            ✨
+          </button>
+        )}
+      </div>
+      {commandBarOpen && <CommandBar onClose={() => setCommandBarOpen(false)} />}
 
       {showPlanBanner && (
         <div className="mb-4 p-2.5 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-500/10 text-xs flex items-center justify-between gap-2">
@@ -226,6 +251,8 @@ export default function DailyTracker() {
       )}
 
       <HabitWidget date={activeDate} />
+
+      <JournalEntryBox date={activeDate} />
 
       <AddTaskForm
         key={`${activeDate}-${prefillNonce}`}
