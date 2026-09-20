@@ -3,7 +3,9 @@ import { db } from '../db/db'
 import ImportCsvModal from '../components/ImportCsvModal'
 import CustomFieldsSettings from '../components/CustomFieldsSettings'
 import { useSettings } from '../context/SettingsContext'
-import { downloadExport, exportData, importData } from '../lib/exportImport'
+import { downloadExport, exportData, importData, wipeAllData } from '../lib/exportImport'
+import { useT } from '../lib/i18n'
+import { LOCALES, type Locale } from '../db/models'
 import { notificationPermission, notificationSupported, requestNotificationPermission } from '../lib/reminders'
 import {
   calendarConfigured,
@@ -61,6 +63,7 @@ function SegmentedControl<T extends string>({
 
 export default function Settings() {
   const { settings, updateSettings } = useSettings()
+  const t = useT()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [csvImportOpen, setCsvImportOpen] = useState(false)
@@ -81,6 +84,12 @@ export default function Settings() {
   const [profileError, setProfileError] = useState<string | null>(null)
   const profiles = listProfiles()
   const activeProfileId = getActiveProfileId()
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleted, setDeleted] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('code')
@@ -108,9 +117,25 @@ export default function Settings() {
   }
 
   async function handleExport() {
-    const json = await exportData()
-    downloadExport(json)
-    setStatus('Backup downloaded.')
+    try {
+      const json = await exportData()
+      downloadExport(json)
+      setStatus('Backup downloaded.')
+      setExportError(null)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed — try again.')
+    }
+  }
+
+  async function handleDeleteAllData() {
+    setDeleting(true)
+    try {
+      await wipeAllData()
+      setDeleted(true)
+    } finally {
+      setDeleting(false)
+      setDeleteModalOpen(false)
+    }
   }
 
   async function handleImportFile(file: File) {
@@ -189,11 +214,29 @@ export default function Settings() {
     await deleteProfile(id)
   }
 
+  if (deleted) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-lg font-semibold mb-2">All your data has been deleted.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+          This browser's copy of Goals Tracker is now empty. Thanks for trying it out.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+        >
+          Start Fresh
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div>
-      <h2 className="text-lg font-bold mb-3">Settings</h2>
+      <h2 className="text-lg font-bold mb-3">{t('Settings')}</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
-        <SettingRow label="Default view" hint="Which screen opens first when you launch the app.">
+        <SettingRow label={t('Default view')} hint="Which screen opens first when you launch the app.">
           <SegmentedControl<DefaultView>
             value={settings.defaultView}
             onChange={(v) => updateSettings({ defaultView: v })}
@@ -204,13 +247,28 @@ export default function Settings() {
           />
         </SettingRow>
 
-        <SettingRow label="Theme" hint="Light or dark appearance.">
+        <SettingRow label={t('Language')} hint="Translates menus, buttons, and labels. Your own task titles and notes are never translated.">
+          <select
+            value={settings.language}
+            onChange={(e) => updateSettings({ language: e.target.value as Locale })}
+            aria-label="Language"
+            className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+          >
+            {LOCALES.map((l) => (
+              <option key={l.value} value={l.value}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        </SettingRow>
+
+        <SettingRow label={t('Theme')} hint="Light or dark appearance.">
           <SegmentedControl<Theme>
             value={settings.theme}
             onChange={(v) => updateSettings({ theme: v })}
             options={[
-              { value: 'light', label: 'Light' },
-              { value: 'dark', label: 'Dark' },
+              { value: 'light', label: t('Light') },
+              { value: 'dark', label: t('Dark') },
             ]}
           />
         </SettingRow>
@@ -284,7 +342,7 @@ export default function Settings() {
           </>
         )}
 
-        <SettingRow label="Export data" hint="Download all goals, days, and tasks as a JSON file.">
+        <SettingRow label={t('Export data')} hint="Download every task, goal, habit, review, note, and setting as one JSON file.">
           <button
             type="button"
             onClick={handleExport}
@@ -293,8 +351,9 @@ export default function Settings() {
             Export JSON
           </button>
         </SettingRow>
+        {exportError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{exportError}</p>}
 
-        <SettingRow label="Import data" hint="Replaces all current data with a previously exported backup.">
+        <SettingRow label={t('Import data')} hint="Replaces all current data with a previously exported backup.">
           <>
             <input
               ref={fileInputRef}
@@ -366,7 +425,7 @@ export default function Settings() {
       {csvImportOpen && <ImportCsvModal defaultDate={todayKey()} onClose={() => setCsvImportOpen(false)} />}
       {status && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{status}</p>}
 
-      <h2 className="text-lg font-bold mt-6 mb-3">Focus</h2>
+      <h2 className="text-lg font-bold mt-6 mb-3">{t('Focus')}</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-3">
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
           Domains to avoid during a Focus Timer session. This list is saved for reference only — blocking a site
@@ -415,7 +474,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <h2 className="text-lg font-bold mt-6 mb-3">Integrations</h2>
+      <h2 className="text-lg font-bold mt-6 mb-3">{t('Integrations')}</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
         <SettingRow
           label="Google Calendar"
@@ -481,7 +540,7 @@ export default function Settings() {
         {webhookError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{webhookError}</p>}
       </div>
 
-      <h2 className="text-lg font-bold mt-6 mb-3">Profiles</h2>
+      <h2 className="text-lg font-bold mt-6 mb-3">{t('Profiles')}</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
         {profiles.map((p) => (
           <SettingRow key={p.id} label={p.name} hint={p.id === activeProfileId ? 'Active' : undefined}>
@@ -528,8 +587,76 @@ export default function Settings() {
         {profileError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{profileError}</p>}
       </div>
 
-      <h2 className="text-lg font-bold mt-6 mb-3">Custom Fields</h2>
+      <h2 className="text-lg font-bold mt-6 mb-3">{t('Custom Fields')}</h2>
       <CustomFieldsSettings />
+
+      <h2 className="text-lg font-bold mt-6 mb-3">{t('Privacy')}</h2>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
+        <SettingRow label="Export all data" hint="Same full JSON export as above — every task, goal, and setting.">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700"
+          >
+            {t('Export All Data')}
+          </button>
+        </SettingRow>
+        <SettingRow
+          label="Delete all my data"
+          hint="Permanently erases everything in this browser for this profile. There's no account or server copy to also remove — this app only ever stores data locally."
+        >
+          <button
+            type="button"
+            onClick={() => setDeleteModalOpen(true)}
+            className="px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700"
+          >
+            {t('Delete All My Data')}
+          </button>
+        </SettingRow>
+      </div>
+
+      {deleteModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4" onClick={() => setDeleteModalOpen(false)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-lg border border-red-300 dark:border-red-700 w-full max-w-sm p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-sm text-red-600 dark:text-red-400 mb-1">Delete all my data?</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+              This permanently deletes every task, goal, habit, and setting in this profile. It cannot be undone.
+              Export a backup first if you want to keep a copy. Type <strong>DELETE</strong> to confirm.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE"
+              aria-label="Type DELETE to confirm"
+              className="w-full mb-3 px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDeleteAllData}
+                disabled={deleteConfirmText !== 'DELETE' || deleting}
+                className="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {deleting ? 'Deleting…' : 'Permanently Delete'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteModalOpen(false)
+                  setDeleteConfirmText('')
+                }}
+                className="px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

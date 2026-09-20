@@ -28,9 +28,10 @@ export function addMonths(key: string, delta: number): string {
   return toDateKey(date)
 }
 
-export function formatDisplayDate(key: string): string {
+/** LC-3: pass an Intl locale tag (see intlLocale() in lib/i18n.ts) to follow the app's chosen language's date conventions. */
+export function formatDisplayDate(key: string, locale?: string): string {
   const date = parseDateKey(key)
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString(locale, {
     weekday: 'long',
     month: 'long',
     day: 'numeric',

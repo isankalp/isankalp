@@ -4,6 +4,9 @@ import {
   dayMinutesDone,
   dayMinutesPlanned,
   dayPercentComplete,
+  dayUnitTotals,
+  groupTasksByUnit,
+  isCustomUnitValid,
   isSubtaskItemsValid,
   isTaskComplete,
   isTaskLocked,
@@ -12,6 +15,9 @@ import {
   sortByPriority,
   syncFromSubtaskItems,
   totalMinutes,
+  unitKey,
+  unitLabel,
+  unitOf,
   type Task,
 } from './models'
 
@@ -174,6 +180,67 @@ describe('isSubtaskItemsValid (GL-5)', () => {
 
   it('allows a non-empty named-subtask list', () => {
     expect(isSubtaskItemsValid(true, [{ id: '1', title: 'Q1', completed: false }])).toBe(true)
+  })
+})
+
+describe('unitOf/unitLabel/unitKey (Epic 32: Custom Units)', () => {
+  it('CU-5: a legacy task with no unit set defaults to minutes', () => {
+    const task = makeTask({ unit: undefined })
+    expect(unitOf(task)).toBe('minutes')
+    expect(unitLabel(task)).toBe('min')
+  })
+
+  it('labels a built-in unit', () => {
+    expect(unitLabel(makeTask({ unit: 'pages' }))).toBe('pages')
+    expect(unitLabel(makeTask({ unit: 'dollars' }))).toBe('$')
+  })
+
+  it('CU-2: a custom unit uses the user-provided label', () => {
+    expect(unitLabel(makeTask({ unit: 'custom', customUnitLabel: 'calories' }))).toBe('calories')
+  })
+
+  it('falls back to a generic label if a custom unit has no label', () => {
+    expect(unitLabel(makeTask({ unit: 'custom', customUnitLabel: '' }))).toBe('units')
+  })
+
+  it('two different custom labels get different grouping keys', () => {
+    const a = unitKey(makeTask({ unit: 'custom', customUnitLabel: 'calories' }))
+    const b = unitKey(makeTask({ unit: 'custom', customUnitLabel: 'dollars saved' }))
+    expect(a).not.toBe(b)
+  })
+})
+
+describe('isCustomUnitValid (CU-2)', () => {
+  it('is always valid for a built-in unit', () => {
+    expect(isCustomUnitValid('minutes', '')).toBe(true)
+  })
+
+  it('requires a non-empty label for a custom unit', () => {
+    expect(isCustomUnitValid('custom', '')).toBe(false)
+    expect(isCustomUnitValid('custom', '  ')).toBe(false)
+    expect(isCustomUnitValid('custom', 'calories')).toBe(true)
+  })
+})
+
+describe('groupTasksByUnit / dayUnitTotals (CU-4: never sum across units)', () => {
+  const minutesTask = makeTask({ id: 'm1', unit: 'minutes', minutesPerSubtask: 5, totalSubtasks: 5, completedSubtasks: 2 })
+  const pagesTask = makeTask({ id: 'p1', unit: 'pages', minutesPerSubtask: 10, totalSubtasks: 10, completedSubtasks: 5 })
+  const tasks = [minutesTask, pagesTask]
+
+  it('groups tasks into separate buckets per unit', () => {
+    const groups = groupTasksByUnit(tasks)
+    expect(groups.size).toBe(2)
+    expect(groups.get('minutes')).toEqual([minutesTask])
+    expect(groups.get('pages')).toEqual([pagesTask])
+  })
+
+  it('computes independent totals per unit, never summed together', () => {
+    const totals = dayUnitTotals(tasks)
+    expect(totals).toHaveLength(2)
+    const minutesTotal = totals.find((t) => t.key === 'minutes')!
+    const pagesTotal = totals.find((t) => t.key === 'pages')!
+    expect(minutesTotal).toMatchObject({ label: 'min', planned: 25, done: 10, percent: 40 })
+    expect(pagesTotal).toMatchObject({ label: 'pages', planned: 100, done: 50, percent: 50 })
   })
 })
 

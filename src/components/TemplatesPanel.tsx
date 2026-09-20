@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db, getOrCreateDay } from '../db/db'
+import { unitLabel } from '../db/models'
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -35,6 +36,8 @@ export default function TemplatesPanel({ date, onClose }: { date: string; onClos
       completedSubtasks: 0,
       priority: 'Medium',
       templateId: template.id,
+      unit: template.unit,
+      customUnitLabel: template.customUnitLabel,
       createdAt: now,
       updatedAt: now,
     })
@@ -76,7 +79,7 @@ export default function TemplatesPanel({ date, onClose }: { date: string; onClos
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{template.title}</p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {template.minutesPerSubtask} min &times; {template.totalSubtasks} subtasks &middot;{' '}
+                    {template.minutesPerSubtask} {unitLabel(template)} &times; {template.totalSubtasks} subtasks &middot;{' '}
                     {recurrenceLabel(template.recurrenceWeekdays)}
                   </p>
                 </div>

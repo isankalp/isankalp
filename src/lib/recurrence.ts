@@ -34,6 +34,8 @@ export async function ensureRecurringTasksGenerated(daysAhead = 60): Promise<voi
         completedSubtasks: 0,
         priority: 'Medium',
         templateId: template.id,
+        unit: template.unit,
+        customUnitLabel: template.customUnitLabel,
         createdAt: now,
         updatedAt: now,
       })

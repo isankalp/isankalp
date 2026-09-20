@@ -20,6 +20,7 @@ const Review = lazy(() => import('./pages/Review'))
 const Badges = lazy(() => import('./pages/Badges'))
 const PlanningWizard = lazy(() => import('./pages/PlanningWizard'))
 const Insights = lazy(() => import('./pages/Insights'))
+const Heatmap = lazy(() => import('./pages/Heatmap'))
 
 function Root() {
   const { settings } = useSettings()
@@ -106,6 +107,14 @@ export default function App() {
           element={
             <Suspense fallback={null}>
               <Insights />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/heatmap"
+          element={
+            <Suspense fallback={null}>
+              <Heatmap />
             </Suspense>
           }
         />

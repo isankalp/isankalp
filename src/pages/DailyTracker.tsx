@@ -13,9 +13,7 @@ import TemplatesPanel from '../components/TemplatesPanel'
 import { db } from '../db/db'
 import {
   PRIORITIES,
-  dayMinutesDone,
-  dayMinutesPlanned,
-  dayPercentComplete,
+  dayUnitTotals,
   isTaskComplete,
   sortByPriority,
   type Priority,
@@ -58,9 +56,7 @@ export default function DailyTracker() {
     completedTasks = [...completedTasks].sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
-  const planned = dayMinutesPlanned(allTasks)
-  const doneMin = dayMinutesDone(allTasks)
-  const dayPercent = dayPercentComplete(allTasks)
+  const unitTotals = dayUnitTotals(allTasks)
   const moveCompleted = settings.completedBehavior === 'move'
 
   const isTodayView = activeDate === todayKey()
@@ -109,23 +105,33 @@ export default function DailyTracker() {
 
       {isTodayView && <RolloverPrompt date={activeDate} />}
 
-      <div className="mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <div className="flex items-center justify-between text-xs mb-1.5">
-          <span className="text-slate-500 dark:text-slate-400">Day progress</span>
-          <span className="font-medium tabular-nums">
-            {doneMin} / {planned} min ({dayPercent}%)
-          </span>
-        </div>
-        <div
-          role="progressbar"
-          aria-valuenow={dayPercent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Day progress"
-          className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"
-        >
-          <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${dayPercent}%` }} />
-        </div>
+      <div className="mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 space-y-2">
+        {unitTotals.length === 0 ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400">Day progress — no tasks yet.</p>
+        ) : (
+          unitTotals.map((ut) => (
+            <div key={ut.key}>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-slate-500 dark:text-slate-400">
+                  Day progress{unitTotals.length > 1 ? ` (${ut.label})` : ''}
+                </span>
+                <span className="font-medium tabular-nums">
+                  {ut.done} / {ut.planned} {ut.label} ({ut.percent}%)
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-valuenow={ut.percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`Day progress, ${ut.label}`}
+                className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"
+              >
+                <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${ut.percent}%` }} />
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {justCompleted && <CompletionFollowUp task={justCompleted} onDone={() => setJustCompleted(null)} />}

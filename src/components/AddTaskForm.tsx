@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db, getOrCreateDay } from '../db/db'
-import { PRIORITIES, type Priority } from '../db/models'
+import { PRIORITIES, UNIT_TYPES, isCustomUnitValid, unitLabel, type Priority, type UnitType } from '../db/models'
+import { useT } from '../lib/i18n'
 
 export interface AddTaskPrefill {
   title: string
   minutesPerSubtask?: number
   totalSubtasks?: number
+}
+
+const UNIT_SELECT_LABELS: Record<UnitType, string> = {
+  minutes: 'Minutes',
+  pages: 'Pages',
+  reps: 'Reps',
+  dollars: 'Dollars',
+  custom: 'Custom',
 }
 
 export default function AddTaskForm({
@@ -23,10 +32,13 @@ export default function AddTaskForm({
   const [minutesPerSubtask, setMinutesPerSubtask] = useState(prefill?.minutesPerSubtask?.toString() ?? '')
   const [totalSubtasks, setTotalSubtasks] = useState(prefill?.totalSubtasks?.toString() ?? '')
   const [priority, setPriority] = useState<Priority>('Medium')
+  const [unit, setUnit] = useState<UnitType>('minutes')
+  const [customUnitLabel, setCustomUnitLabel] = useState('')
   const [day, setDay] = useState(defaultDate)
   const [error, setError] = useState<string | null>(prefill ? "Couldn't parse that — fill in manually" : null)
   const [suggested, setSuggested] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const t = useT()
 
   useEffect(() => {
     if (prefill) titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -51,7 +63,11 @@ export default function AddTaskForm({
       return null
     }
     if (!Number.isFinite(minutes) || minutes <= 0 || !Number.isFinite(total) || total <= 0) {
-      setError('Minutes per subtask and total subtasks must be greater than 0.')
+      setError(`Amount per subtask and total subtasks must be greater than 0.`)
+      return null
+    }
+    if (!isCustomUnitValid(unit, customUnitLabel)) {
+      setError('Enter a label for your custom unit.')
       return null
     }
     setError(null)
@@ -73,6 +89,8 @@ export default function AddTaskForm({
       totalSubtasks: Math.floor(fields.total),
       completedSubtasks: 0,
       priority,
+      unit,
+      customUnitLabel: unit === 'custom' ? customUnitLabel.trim() : undefined,
       createdAt: now,
       updatedAt: now,
     })
@@ -94,6 +112,8 @@ export default function AddTaskForm({
       minutesPerSubtask: fields.minutes,
       totalSubtasks: Math.floor(fields.total),
       recurrenceWeekdays: [],
+      unit,
+      customUnitLabel: unit === 'custom' ? customUnitLabel.trim() : undefined,
       createdAt: Date.now(),
     })
   }
@@ -107,7 +127,7 @@ export default function AddTaskForm({
         <input
           ref={titleInputRef}
           type="text"
-          placeholder="Task title (e.g. Solve DSA questions)"
+          placeholder={t('Task title (e.g. Solve DSA questions)')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={120}
@@ -146,7 +166,7 @@ export default function AddTaskForm({
         >
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              {p}
+              {t(p)}
             </option>
           ))}
         </select>
@@ -157,19 +177,50 @@ export default function AddTaskForm({
           className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
         />
       </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <select
+          value={unit}
+          onChange={(e) => setUnit(e.target.value as UnitType)}
+          aria-label="Unit"
+          className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+        >
+          {UNIT_TYPES.map((u) => (
+            <option key={u} value={u}>
+              {UNIT_SELECT_LABELS[u]}
+            </option>
+          ))}
+        </select>
+        {unit === 'custom' && (
+          <input
+            type="text"
+            value={customUnitLabel}
+            onChange={(e) => setCustomUnitLabel(e.target.value)}
+            placeholder="e.g. calories"
+            maxLength={20}
+            aria-label="Custom unit label"
+            className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs w-28"
+          />
+        )}
+        {Number(minutesPerSubtask) > 0 && Number(totalSubtasks) > 0 && (
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+            {minutesPerSubtask} {unitLabel({ unit, customUnitLabel })} &times; {totalSubtasks} = {Number(minutesPerSubtask) * Number(totalSubtasks)}{' '}
+            {unitLabel({ unit, customUnitLabel })}
+          </span>
+        )}
+      </div>
       <div className="flex items-center gap-2">
         <button
           type="submit"
           className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"
         >
-          Add Task
+          {t('Add Task')}
         </button>
         <button
           type="button"
           onClick={handleSaveAsTemplate}
           className="px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700"
         >
-          Save as Template
+          {t('Save as Template')}
         </button>
         {onToggleTemplates && (
           <button
@@ -178,7 +229,7 @@ export default function AddTaskForm({
             aria-label="Toggle templates panel"
             className="px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 text-xs hover:bg-slate-100 dark:hover:bg-slate-700"
           >
-            📋 Templates
+            📋 {t('Templates')}
           </button>
         )}
         {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}

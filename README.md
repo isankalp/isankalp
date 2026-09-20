@@ -33,6 +33,10 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
 - **Keyboard shortcuts** — N to add a task, arrow keys to move between rows, Enter to increment, and `?` for a full shortcut reference.
 - **Installable & offline** — installs as a PWA and keeps viewing/editing tasks fully working with no network connection.
 - **Accessibility** — full keyboard operability, screen-reader labels on progress/completion controls, a High-Contrast mode, and no state conveyed by color alone.
+- **Custom Units** — a task can be measured in Minutes, Pages, Reps, Dollars, or a user-typed custom unit instead of always minutes; day/stats totals are grouped and shown separately per unit, never summed across incompatible ones.
+- **Contribution Heatmap** — a private, GitHub-style yearly grid shaded by each day's percent complete, filterable by unit or category/tag.
+- **Privacy** — a dedicated Export All Data (every table, one JSON file) and a double-confirmation Delete All My Data that irreversibly wipes this browser's local copy.
+- **Language** — English, Spanish, and Hindi for navigation, Settings, and the add-task form, with untranslated strings falling back to readable English and user-entered content (titles, notes) never translated.
 
 ## Data model
 

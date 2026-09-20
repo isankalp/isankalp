@@ -92,6 +92,32 @@ export class GoalsDB extends Dexie {
       taskHistory: 'id, taskId, at',
       webhookQueue: 'id, createdAt',
     })
+    this.version(5)
+      .stores({
+        tasks: 'id, dayId, title, createdAt, templateId, dependsOnTaskId',
+        days: 'id, &date',
+        goals: 'id, title, archivedAt',
+        settings: 'id',
+        habits: 'id, archivedAt',
+        habitLogs: 'id, habitId, date, &[habitId+date]',
+        templates: 'id, archivedAt',
+        reviews: 'id, periodType, periodKey',
+        badges: 'id, type',
+        completionEvents: 'id, taskId, at',
+        voiceNotes: 'id, taskId, createdAt',
+        customFields: 'id, name',
+        taskHistory: 'id, taskId, at',
+        webhookQueue: 'id, createdAt',
+      })
+      .upgrade(async (tx) => {
+        // CU-5: every pre-existing task defaults to Minutes, with no data loss or re-entry.
+        await tx
+          .table('tasks')
+          .toCollection()
+          .modify((task) => {
+            if (task.unit === undefined) task.unit = 'minutes'
+          })
+      })
   }
 }
 

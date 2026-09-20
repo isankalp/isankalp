@@ -1,8 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { addDays, formatDisplayDate, isToday, todayKey } from '../lib/date'
+import { intlLocale } from '../lib/i18n'
+import { useSettings } from '../context/SettingsContext'
 
 export default function DayNav({ date }: { date: string }) {
   const navigate = useNavigate()
+  const { settings } = useSettings()
 
   return (
     <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
@@ -16,7 +19,7 @@ export default function DayNav({ date }: { date: string }) {
       </button>
 
       <div className="flex items-center gap-1.5 text-center flex-wrap justify-center">
-        <span className="font-semibold text-sm">{formatDisplayDate(date)}</span>
+        <span className="font-semibold text-sm">{formatDisplayDate(date, intlLocale(settings.language))}</span>
         {isToday(date) ? (
           <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
             Today

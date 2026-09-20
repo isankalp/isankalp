@@ -53,6 +53,8 @@ export async function acceptRollover(candidate: RolloverCandidate, targetDate: s
     totalSubtasks: candidate.remaining,
     completedSubtasks: 0,
     priority: candidate.task.priority,
+    unit: candidate.task.unit,
+    customUnitLabel: candidate.task.customUnitLabel,
     rolledOverFromTaskId: candidate.task.id,
     rolledOverFromTitle: candidate.task.title,
     createdAt: now,

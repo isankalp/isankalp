@@ -10,6 +10,8 @@ import {
   minutesDone,
   percentComplete,
   totalMinutes,
+  unitLabel,
+  unitOf,
   type Priority,
   type Task,
 } from '../db/models'
@@ -45,6 +47,8 @@ export default function TaskRow({
   const percent = percentComplete(task)
   const done = minutesDone(task)
   const total = totalMinutes(task)
+  const unit = unitLabel(task)
+  const isMinutesUnit = unitOf(task) === 'minutes'
   const [notesOpen, setNotesOpen] = useState(false)
   const [focusOpen, setFocusOpen] = useState(false)
   const [subtasksOpen, setSubtasksOpen] = useState(false)
@@ -210,7 +214,7 @@ export default function TaskRow({
           )}
           <p className={clsx('text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center flex-wrap gap-x-1', complete && 'line-through')}>
             <span>
-              {done} / {total} min &middot;
+              {done} / {total} {unit} &middot;
             </span>
             <input
               type="number"
@@ -220,10 +224,10 @@ export default function TaskRow({
               onKeyDown={blurOnEnter}
               min={0.1}
               step="any"
-              aria-label="Minutes per subtask"
+              aria-label={`${unit} per subtask`}
               className={clsx('w-10 text-right tabular-nums', fieldClass)}
             />
-            <span>min &times;</span>
+            <span>{unit} &times;</span>
             <input
               type="number"
               defaultValue={task.totalSubtasks}
@@ -395,14 +399,16 @@ export default function TaskRow({
             +
           </button>
           <span className="text-[11px] text-slate-400">of {task.totalSubtasks} subtasks</span>
-          <button
-            type="button"
-            onClick={() => setFocusOpen(true)}
-            disabled={complete || locked}
-            className="ml-auto text-[11px] px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
-          >
-            ▶ Start Focus
-          </button>
+          {isMinutesUnit && (
+            <button
+              type="button"
+              onClick={() => setFocusOpen(true)}
+              disabled={complete || locked}
+              className="ml-auto text-[11px] px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+            >
+              ▶ Start Focus
+            </button>
+          )}
         </div>
       )}
 

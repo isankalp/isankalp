@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import { db } from '../db/db'
 import { dailyTotals } from '../lib/aggregate'
 import { addMonths, monthGrid, parseDateKey, todayKey } from '../lib/date'
+import { unitOf } from '../db/models'
 
 function shade(percent: number): string {
   if (percent <= 0) return 'bg-slate-100 dark:bg-slate-800'
@@ -19,7 +20,9 @@ export default function Calendar() {
   const navigate = useNavigate()
   const [monthAnchor, setMonthAnchor] = useState(todayKey())
   const days = useLiveQuery(() => db.days.toArray(), []) ?? []
-  const tasks = useLiveQuery(() => db.tasks.toArray(), []) ?? []
+  const allTasks = useLiveQuery(() => db.tasks.toArray(), []) ?? []
+  // CU-4: shading is minutes-based, so only minutes-unit tasks feed it — never summed with other units.
+  const tasks = allTasks.filter((t) => unitOf(t) === 'minutes')
 
   const totalsByDate = new Map(dailyTotals(days, tasks).map((t) => [t.date, t]))
   const grid = monthGrid(monthAnchor)

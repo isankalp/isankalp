@@ -7,6 +7,7 @@ import { bucketTotals, breakdownByTitle, dailyTotals, fillMissingDays, trailingW
 import { completedDateKeys, currentStreak, longestStreak } from '../lib/streaks'
 import { addDays, todayKey } from '../lib/date'
 import { useSettings } from '../context/SettingsContext'
+import { unitOf } from '../db/models'
 
 const periods: { value: Period; label: string }[] = [
   { value: 'day', label: 'Daily' },
@@ -24,7 +25,11 @@ export default function Stats() {
   const { settings } = useSettings()
   const colors = chartColors[settings.theme]
   const days = useLiveQuery(() => db.days.toArray(), []) ?? []
-  const tasks = useLiveQuery(() => db.tasks.toArray(), []) ?? []
+  const allTasks = useLiveQuery(() => db.tasks.toArray(), []) ?? []
+  // CU-4: these charts sum minutes across tasks, so only minutes-unit tasks are included — other
+  // units (pages, dollars, custom, ...) never get silently summed into a "minutes" number.
+  const tasks = allTasks.filter((t) => unitOf(t) === 'minutes')
+  const hasOtherUnits = allTasks.length > tasks.length
 
   const totals = dailyTotals(days, tasks)
   const windowed =
@@ -43,10 +48,21 @@ export default function Stats() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Stats & Streaks</h2>
-        <Link to="/insights" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-          Insights →
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link to="/heatmap" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+            Heatmap →
+          </Link>
+          <Link to="/insights" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+            Insights →
+          </Link>
+        </div>
       </div>
+
+      {hasOtherUnits && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 -mt-2">
+          These charts cover minutes-based tasks only — tasks in other units aren't summed in here.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-center">

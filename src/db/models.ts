@@ -2,6 +2,18 @@ export type Priority = 'High' | 'Medium' | 'Low'
 
 export const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
 
+export type UnitType = 'minutes' | 'pages' | 'reps' | 'dollars' | 'custom'
+
+export const UNIT_TYPES: UnitType[] = ['minutes', 'pages', 'reps', 'dollars', 'custom']
+
+const UNIT_DEFAULT_LABELS: Record<UnitType, string> = {
+  minutes: 'min',
+  pages: 'pages',
+  reps: 'reps',
+  dollars: '$',
+  custom: 'units',
+}
+
 export interface SubtaskItem {
   id: string
   title: string
@@ -40,6 +52,10 @@ export interface Task {
   googleEventId?: string
   /** Values keyed by CustomFieldDef id (Epic 19). Kept even after the field def is deleted, unless erased explicitly. */
   customFieldValues?: Record<string, string | number>
+  /** Measurement unit for this task's amounts (Epic 32). Absent/legacy tasks are treated as 'minutes' — see unitOf(). */
+  unit?: UnitType
+  /** User-defined label, only meaningful when unit === 'custom'. */
+  customUnitLabel?: string
   createdAt: number
   updatedAt: number
 }
@@ -94,6 +110,9 @@ export interface Template {
   createdAt: number
   /** Soft-delete: stops future recurrence; already-created tasks are unaffected. */
   archivedAt?: number
+  /** Carried onto every task generated from this template (Epic 32). Absent means 'minutes'. */
+  unit?: UnitType
+  customUnitLabel?: string
 }
 
 export type ReviewPeriodType = 'week' | 'month'
@@ -172,7 +191,17 @@ export interface Settings {
   autoBackupIntervalDays: number
   lastAutoBackupAt?: number
   lastAutoBackupFailedAt?: number
+  /** UI language (Epic 38). User-generated content is never translated, only static UI strings. */
+  language: Locale
 }
+
+export type Locale = 'en' | 'es' | 'hi'
+
+export const LOCALES: { value: Locale; label: string }[] = [
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Español' },
+  { value: 'hi', label: 'हिन्दी' },
+]
 
 export const DEFAULT_SETTINGS: Settings = {
   id: 'settings',
@@ -188,6 +217,7 @@ export const DEFAULT_SETTINGS: Settings = {
   highContrast: false,
   autoBackupEnabled: false,
   autoBackupIntervalDays: 1,
+  language: 'en',
 }
 
 /** Clamp completedSubtasks into [0, totalSubtasks], rounding to whole units. */
@@ -253,4 +283,60 @@ export function isTaskLocked(task: Pick<Task, 'dependsOnTaskId'>, tasksById: Map
   const dependency = tasksById.get(task.dependsOnTaskId)
   if (!dependency) return false
   return !isTaskComplete(dependency)
+}
+
+/** CU-5: legacy tasks with no unit set are treated as Minutes, with zero migration/re-entry needed. */
+export function unitOf(task: Pick<Task, 'unit'>): UnitType {
+  return task.unit ?? 'minutes'
+}
+
+/** Display label for a task's amounts, e.g. "min", "pages", or the user's own custom label. */
+export function unitLabel(task: Pick<Task, 'unit' | 'customUnitLabel'>): string {
+  const unit = unitOf(task)
+  if (unit === 'custom') return task.customUnitLabel?.trim() || UNIT_DEFAULT_LABELS.custom
+  return UNIT_DEFAULT_LABELS[unit]
+}
+
+/** Grouping key so two custom units with different labels (e.g. "calories" vs "dollars saved") never merge. */
+export function unitKey(task: Pick<Task, 'unit' | 'customUnitLabel'>): string {
+  const unit = unitOf(task)
+  return unit === 'custom' ? `custom:${task.customUnitLabel?.trim().toLowerCase() || 'units'}` : unit
+}
+
+/** CU-2: a custom unit must have a non-empty label before the task can be saved. */
+export function isCustomUnitValid(unit: UnitType, customUnitLabel: string): boolean {
+  return unit !== 'custom' || customUnitLabel.trim().length > 0
+}
+
+export function groupTasksByUnit(tasks: Task[]): Map<string, Task[]> {
+  const map = new Map<string, Task[]>()
+  for (const task of tasks) {
+    const key = unitKey(task)
+    const list = map.get(key) ?? []
+    list.push(task)
+    map.set(key, list)
+  }
+  return map
+}
+
+export interface UnitTotal {
+  key: string
+  label: string
+  planned: number
+  done: number
+  percent: number
+}
+
+/** CU-4: day/stats rollups are grouped and shown separately per unit, never summed across incompatible units. */
+export function dayUnitTotals(tasks: Task[]): UnitTotal[] {
+  const groups = groupTasksByUnit(tasks)
+  return [...groups.entries()]
+    .map(([key, groupTasks]) => ({
+      key,
+      label: unitLabel(groupTasks[0]),
+      planned: dayMinutesPlanned(groupTasks),
+      done: dayMinutesDone(groupTasks),
+      percent: dayPercentComplete(groupTasks),
+    }))
+    .sort((a, b) => (a.key === 'minutes' ? -1 : b.key === 'minutes' ? 1 : a.label.localeCompare(b.label)))
 }
