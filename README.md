@@ -41,10 +41,14 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
 - **Progress Photo Evidence** — attach a photo to any subtask completion (optional, never blocks the increment if it fails), view a task's photos chronologically, and compare two side by side.
 - **Bulk Task Operations** — multi-select tasks on a day to move, duplicate (reset to 0 progress), tag, or delete them together; bulk delete requires a count-specific confirmation and is undoable.
 - **Time-Blocking view** — drag tasks from an Unscheduled sidebar onto an hourly grid, resize/reposition blocks with 15-minute snapping, and see overlapping blocks flagged and laid out side by side so every block stays clickable.
+- **Accounts** *(optional, needs setup — see below)* — real Sign Up / Log In (email+password or Google), password reset by email, changing your email or password from Settings, and an unverified-email banner that never blocks task tracking. Entirely hidden when no backend is configured, so the app stays fully local-first by default.
+- **Local-to-account migration** — the first time you log in on a device with existing local data, you're offered a one-time backup upload of everything (same format as Export All Data) to your account before continuing; your on-device data is never touched or deleted by this.
 
 ## Skipped this round
 
 Some requested features need a real backend, multi-user accounts, or a native app this project doesn't have, and were skipped rather than faked: public/shared profiles or leaderboards, a template marketplace, community challenges, a mentor/coach dashboard, health-app sync, notification-digest emails, and smartwatch companions. Each was scoped out explicitly rather than half-built.
+
+Accounts are the one exception — real Sign Up/Log In/password reset/session management now exist, backed by [Supabase](https://supabase.com) (see **Accounts setup** below). The local-to-account migration is scoped down from a full relational sync to a single backup-file upload: your local data is never deleted, converted, or merged automatically. Login lockout after repeated failures is enforced client-side only (a real server-side rate limit isn't something a static SPA can add on its own) — an honest limitation, not a security guarantee.
 
 ## Data model
 
@@ -52,7 +56,7 @@ Some requested features need a real backend, multi-user accounts, or a native ap
 
 ## Stack
 
-React + TypeScript + Vite + Tailwind CSS v4, local-first persistence via IndexedDB ([Dexie.js](https://dexie.org/)) — no backend required. Charts via [Recharts](https://recharts.org/). Client-side routing via React Router.
+React + TypeScript + Vite + Tailwind CSS v4, local-first persistence via IndexedDB ([Dexie.js](https://dexie.org/)) — no backend required for task tracking. Charts via [Recharts](https://recharts.org/). Client-side routing via React Router. Accounts (optional) are backed by [Supabase](https://supabase.com) (`@supabase/supabase-js`), loaded on demand so it adds nothing to the bundle when unconfigured.
 
 ## Development
 
@@ -65,3 +69,13 @@ npm run lint      # oxlint
 ```
 
 Data lives entirely in the browser's IndexedDB. Use Settings → Export/Import to back up or move data between browsers.
+
+## Accounts setup (optional)
+
+Sign Up / Log In / password reset are hidden entirely until configured — nothing else in the app changes if you skip this section.
+
+1. Copy `.env.example` to `.env.local` and create a free project at [supabase.com](https://supabase.com).
+2. Fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from Project Settings → API.
+3. For "Continue with Google", create an OAuth client in Google Cloud Console (same one used for Calendar sync works), then enable the Google provider under Supabase → Authentication → Providers and add that client's ID/secret there.
+4. For the local-to-account data migration's backup upload, create a Storage bucket named `account-backups` in your Supabase project, with a policy that lets an authenticated user read/write only paths under their own `auth.uid()`.
+5. Set the same env vars on your host (e.g. Vercel → Project Settings → Environment Variables) for deploys.

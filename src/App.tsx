@@ -4,7 +4,10 @@ import Layout from './components/Layout'
 import OnboardingWizard from './components/OnboardingWizard'
 import DailyTracker from './pages/DailyTracker'
 import Goals from './pages/Goals'
+import ResetPassword from './pages/ResetPassword'
 import Settings from './pages/Settings'
+import DataMigrationPrompt from './components/DataMigrationPrompt'
+import { useAuth } from './context/AuthContext'
 import { todayKey } from './lib/date'
 import { useSettings } from './context/SettingsContext'
 import { ensureRecurringTasksGenerated } from './lib/recurrence'
@@ -30,6 +33,7 @@ function Root() {
 
 export default function App() {
   const { settings } = useSettings()
+  const { user } = useAuth()
   const [showOnboarding, setShowOnboarding] = useState(() => !hasOnboarded())
 
   useEffect(() => {
@@ -58,10 +62,12 @@ export default function App() {
   return (
     <>
       {showOnboarding && <OnboardingWizard onFinish={() => setShowOnboarding(false)} />}
+      {user && <DataMigrationPrompt />}
       <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Root />} />
         <Route path="/day/:date" element={<DailyTracker />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/timeblock/:date"
           element={

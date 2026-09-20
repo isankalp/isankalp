@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import ImportCsvModal from '../components/ImportCsvModal'
 import CustomFieldsSettings from '../components/CustomFieldsSettings'
+import AccountSettings from '../components/AccountSettings'
 import { useSettings } from '../context/SettingsContext'
 import { downloadExport, exportData, importData, wipeAllData } from '../lib/exportImport'
 import { useT } from '../lib/i18n'
@@ -272,6 +273,11 @@ export default function Settings() {
   return (
     <div>
       <h2 className="text-lg font-bold mb-3">{t('Settings')}</h2>
+
+      <h2 className="text-lg font-bold mt-6 mb-3">Account</h2>
+      <AccountSettings />
+
+      <h2 className="text-lg font-bold mt-6 mb-3">Preferences</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
         <SettingRow label={t('Default view')} hint="Which screen opens first when you launch the app.">
           <SegmentedControl<DefaultView>
