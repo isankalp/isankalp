@@ -27,9 +27,11 @@ const Heatmap = lazy(() => import('./pages/Heatmap'))
 const TimeBlocking = lazy(() => import('./pages/TimeBlocking'))
 const Ask = lazy(() => import('./pages/Ask'))
 const JournalInsights = lazy(() => import('./pages/JournalInsights'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
 
 function Root() {
   const { settings } = useSettings()
+  if (settings.defaultView === 'dashboard') return <Navigate to="/dashboard" replace />
   return <Navigate to={settings.defaultView === 'week' ? '/stats' : `/day/${todayKey()}`} replace />
 }
 
@@ -68,6 +70,14 @@ export default function App() {
       <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Root />} />
+        <Route
+          path="/dashboard"
+          element={
+            <Suspense fallback={null}>
+              <Dashboard />
+            </Suspense>
+          }
+        />
         <Route path="/day/:date" element={<DailyTracker />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route

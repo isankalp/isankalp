@@ -11,7 +11,8 @@ import UnverifiedEmailBanner from './UnverifiedEmailBanner'
 import { useAiClient } from '../hooks/useAiClient'
 
 const links = [
-  { to: `/day/${todayKey()}`, label: 'Today', match: '/day' },
+  { to: '/dashboard', label: 'Dashboard', match: '/dashboard' },
+  { to: `/day/${todayKey()}`, label: 'Tasks', match: '/day' },
   { to: '/calendar', label: 'Calendar', match: '/calendar' },
   { to: '/stats', label: 'Stats', match: '/stats' },
   { to: '/insights', label: 'Insights', match: '/insights' },

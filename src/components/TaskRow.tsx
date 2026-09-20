@@ -172,6 +172,7 @@ export default function TaskRow({
 
   return (
     <li
+      id={`task-${task.id}`}
       data-task-row
       tabIndex={0}
       aria-label={`${task.title}, ${percent} percent complete, ${task.completedSubtasks} of ${task.totalSubtasks} subtasks${complete ? ', complete' : ''}${locked ? ', locked' : ''}`}

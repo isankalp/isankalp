@@ -290,6 +290,7 @@ export default function Settings() {
             value={settings.defaultView}
             onChange={(v) => updateSettings({ defaultView: v })}
             options={[
+              { value: 'dashboard', label: 'Dashboard' },
               { value: 'today', label: 'Today' },
               { value: 'week', label: 'Week' },
             ]}

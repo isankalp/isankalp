@@ -39,11 +39,14 @@ export default function AddTaskForm({
   defaultDate,
   onToggleTemplates,
   prefill,
+  autoFocus,
 }: {
   defaultDate: string
   onToggleTemplates?: () => void
   /** Pre-fills the form, e.g. from a Quick-Add parse that couldn't be fully resolved (QA-2). */
   prefill?: AddTaskPrefill
+  /** Scrolls to and focuses the title field on mount, e.g. from Dashboard's "Add Task" button (DB-4). */
+  autoFocus?: boolean
 }) {
   const [title, setTitle] = useState(prefill?.title ?? '')
   const [minutesPerSubtask, setMinutesPerSubtask] = useState(prefill?.minutesPerSubtask?.toString() ?? '')
@@ -61,8 +64,11 @@ export default function AddTaskForm({
   const { configured: aiConfigured, structured } = useAiClient()
 
   useEffect(() => {
-    if (prefill) titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount for this prefill instance
+    if (prefill || autoFocus) {
+      titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (autoFocus) titleInputRef.current?.focus()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount for this prefill/autoFocus instance
   }, [])
 
   const capacityOn = isCapacityEnabled(settings.capacityMode, settings.capacityMinutes)

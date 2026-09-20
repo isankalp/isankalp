@@ -183,7 +183,10 @@ export interface CompletionPhoto {
   createdAt: number
 }
 
-export type DefaultView = 'today' | 'week'
+export type DefaultView = 'dashboard' | 'today' | 'week'
+
+export const DASHBOARD_WIDGET_IDS = ['goals', 'habits'] as const
+export type DashboardWidgetId = (typeof DASHBOARD_WIDGET_IDS)[number]
 export type Theme = 'light' | 'dark'
 export type CompletedBehavior = 'move' | 'in-place'
 
@@ -222,6 +225,9 @@ export interface Settings {
   /** QC-5/QC-6: gates whether new tasks get AI tag suggestions at all; the suggestions themselves are
    *  always editable/removable before save regardless of this setting. */
   autoTaggingEnabled: boolean
+  /** DB-7: Dashboard widget order and visibility, persisted per account/device like every other setting. */
+  dashboardWidgetOrder: DashboardWidgetId[]
+  dashboardHiddenWidgets: DashboardWidgetId[]
 }
 
 export type CapacityMode = 'off' | 'daily' | 'weekly'
@@ -236,7 +242,7 @@ export const LOCALES: { value: Locale; label: string }[] = [
 
 export const DEFAULT_SETTINGS: Settings = {
   id: 'settings',
-  defaultView: 'today',
+  defaultView: 'dashboard',
   theme: 'light',
   completedBehavior: 'move',
   remindersEnabled: false,
@@ -255,6 +261,8 @@ export const DEFAULT_SETTINGS: Settings = {
   aiRequestCountSince: Date.now(),
   journalAnalysisEnabled: true,
   autoTaggingEnabled: true,
+  dashboardWidgetOrder: [...DASHBOARD_WIDGET_IDS],
+  dashboardHiddenWidgets: [],
 }
 
 /** A single free-text daily journal entry (Epic 57's prerequisite — never built as its own "v5"

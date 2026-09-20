@@ -1,6 +1,6 @@
 import { useLiveQuery } from '../hooks/useLiveQuery'
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import AddTaskForm, { type AddTaskPrefill } from '../components/AddTaskForm'
 import BulkActionToolbar from '../components/BulkActionToolbar'
 import CommandBar from '../components/CommandBar'
@@ -32,6 +32,9 @@ import { capacityPercent, isCapacityEnabled, minutesUnitPlanned } from '../lib/c
 export default function DailyTracker() {
   const { date } = useParams<{ date: string }>()
   const activeDate = date ?? todayKey()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const focusAdd = searchParams.get('focus') === 'add'
+  const focusTaskId = searchParams.get('task')
   const { settings } = useSettings()
   const { configured: aiConfigured } = useAiClient()
   const [commandBarOpen, setCommandBarOpen] = useState(false)
@@ -104,6 +107,36 @@ export default function DailyTracker() {
   const showPlanBanner = isTodayView && !planBannerDismissed && shouldPromptWeeklyPlan(currentWeek)
 
   const selectedTasks = allTasks.filter((t) => selectedIds.has(t.id))
+
+  // DB-4: Dashboard's "+ Add Task" links here with ?focus=add — consume it once so a later
+  // visit to the same URL (e.g. browser back) doesn't keep re-stealing focus.
+  useEffect(() => {
+    if (!focusAdd) return
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('focus')
+      return next
+    }, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount when focusAdd is set
+  }, [])
+
+  // DB-5: Dashboard's pending-task tap links here with ?task={id} — scroll it into view and
+  // briefly highlight it, then drop the param so re-visiting the URL doesn't re-trigger it.
+  useEffect(() => {
+    if (!focusTaskId || !tasks) return
+    const el = document.getElementById(`task-${focusTaskId}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('ring-2', 'ring-indigo-500')
+    const timeout = setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-500'), 2000)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('task')
+      return next
+    }, { replace: true })
+    return () => clearTimeout(timeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once tasks are loaded for this focusTaskId
+  }, [focusTaskId, tasks])
 
   function renderTask(task: Task) {
     return (
@@ -259,6 +292,7 @@ export default function DailyTracker() {
         defaultDate={activeDate}
         onToggleTemplates={() => setTemplatesOpen((v) => !v)}
         prefill={prefillNonce > 0 ? prefill : undefined}
+        autoFocus={focusAdd}
       />
 
       {templatesOpen && <TemplatesPanel date={activeDate} onClose={() => setTemplatesOpen(false)} />}
