@@ -93,7 +93,7 @@ export default function TaskRow({
     }
     await commitField(patch, `Update "${task.title}" progress`)
     const delta = clamped - task.completedSubtasks
-    const eventId = await logCompletionEvent(task.id, delta, spotifyTrackCount)
+    const eventId = await logCompletionEvent(task.id, delta, spotifyTrackCount, actualMinutes)
     const nowComplete = clamped === task.totalSubtasks && task.totalSubtasks > 0
     if (!wasComplete && nowComplete) {
       // Row is about to unmount (moves to the Completed section) — hand the photo prompt to the page level.

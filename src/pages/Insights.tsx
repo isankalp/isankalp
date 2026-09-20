@@ -5,11 +5,13 @@ import ChartErrorBoundary from '../components/ChartErrorBoundary'
 import { db } from '../db/db'
 import { useSettings } from '../context/SettingsContext'
 import {
+  MIN_FOCUS_SESSIONS,
   MIN_HISTORY_WEEKS,
   MIN_RATED_TASKS,
   effortVarianceRows,
   energyCorrelation,
   generateObservations,
+  musicFocusCorrelation,
   timeOfDayBuckets,
   weekdayCompletionStats,
   weeksOfHistory,
@@ -188,6 +190,45 @@ export default function Insights() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+            )
+          })()}
+        </ChartErrorBoundary>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+        <h3 className="font-semibold text-sm mb-2">Music &amp; focus</h3>
+        <ChartErrorBoundary label="music correlation chart">
+          {(() => {
+            const rows = musicFocusCorrelation(tasks, events)
+            return rows.length === 0 ? (
+              <EmptySection
+                text={`Not enough data yet — needs at least ${MIN_FOCUS_SESSIONS} Focus Timer sessions with Spotify music and ${MIN_FOCUS_SESSIONS} without.`}
+              />
+            ) : (
+              <>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={rows.map((r) => ({ ...r, label: r.withMusic ? 'With music' : 'Without music' }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                      <XAxis dataKey="label" fontSize={11} stroke={colors.tick} />
+                      <YAxis fontSize={11} stroke={colors.tick} unit="%" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: settings.theme === 'dark' ? '#1e293b' : '#ffffff',
+                          borderColor: colors.grid,
+                          fontSize: 12,
+                          borderRadius: 8,
+                        }}
+                        labelStyle={{ color: settings.theme === 'dark' ? '#e2e8f0' : '#0f172a' }}
+                      />
+                      <Bar dataKey="avgPaceRatio" name="Avg. % of planned time" fill={colors.bar} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  100% means a session ran right on its planned pace; lower is faster, higher is slower.
+                </p>
+              </>
             )
           })()}
         </ChartErrorBoundary>

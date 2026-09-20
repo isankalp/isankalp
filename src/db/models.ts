@@ -148,8 +148,13 @@ export interface CompletionEvent {
   delta: number
   at: number
   /** Epic 64/65: distinct Spotify tracks played during the Focus Timer session that produced this
-   *  completion. Absent means no music was played (or this wasn't logged from a Focus session). */
+   *  completion (0 if none were). Absent (not 0) means this event didn't come from a Focus Timer
+   *  session at all — e.g. a manual +/- — so it's excluded from the with/without-music comparison. */
   spotifyTrackCount?: number
+  /** Epic 65: wall-clock minutes that specific Focus Timer session actually took, set alongside
+   *  spotifyTrackCount so the two can be compared per-session rather than against a task's
+   *  cumulative actualMinutes, which can span several sessions. */
+  sessionActualMinutes?: number
 }
 
 export interface VoiceNote {

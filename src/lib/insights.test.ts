@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { Day, Task } from '../db/models'
+import type { CompletionEvent, Day, Task } from '../db/models'
 import {
+  MIN_FOCUS_SESSIONS,
   MIN_RATED_TASKS,
   effortVarianceRows,
   energyCorrelation,
   generateObservations,
+  musicFocusCorrelation,
   timeOfDayBuckets,
   weekdayCompletionStats,
   weeksOfHistory,
@@ -123,5 +125,39 @@ describe('energyCorrelation', () => {
     ]
     const rows = energyCorrelation(tasks)
     expect(rows).toEqual([{ rating: 5, avgPercent: 100, taskCount: MIN_RATED_TASKS }])
+  })
+})
+
+function makeEvent(overrides: Partial<CompletionEvent> = {}): CompletionEvent {
+  return { id: 'e1', taskId: 't1', delta: 1, at: 0, ...overrides }
+}
+
+describe('musicFocusCorrelation', () => {
+  it('requires at least MIN_FOCUS_SESSIONS of each group', () => {
+    const task = makeTask({ minutesPerSubtask: 10 })
+    const events = [
+      makeEvent({ spotifyTrackCount: 2, sessionActualMinutes: 10 }),
+      makeEvent({ spotifyTrackCount: 0, sessionActualMinutes: 10 }),
+    ]
+    expect(musicFocusCorrelation([task], events)).toEqual([])
+  })
+
+  it('ignores events with no spotifyTrackCount or sessionActualMinutes recorded', () => {
+    const task = makeTask({ minutesPerSubtask: 10 })
+    const events = Array.from({ length: MIN_FOCUS_SESSIONS }, () => makeEvent({}))
+    expect(musicFocusCorrelation([task], events)).toEqual([])
+  })
+
+  it('computes average pace ratio per group once the threshold is met', () => {
+    const task = makeTask({ minutesPerSubtask: 10 })
+    const events = [
+      ...Array.from({ length: MIN_FOCUS_SESSIONS }, () => makeEvent({ spotifyTrackCount: 2, sessionActualMinutes: 8 })),
+      ...Array.from({ length: MIN_FOCUS_SESSIONS }, () => makeEvent({ spotifyTrackCount: 0, sessionActualMinutes: 12 })),
+    ]
+    const rows = musicFocusCorrelation([task], events)
+    expect(rows).toEqual([
+      { withMusic: true, avgPaceRatio: 80, sessionCount: MIN_FOCUS_SESSIONS },
+      { withMusic: false, avgPaceRatio: 120, sessionCount: MIN_FOCUS_SESSIONS },
+    ])
   })
 })

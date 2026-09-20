@@ -96,7 +96,7 @@ export default function FocusTimer({
           <button
             type="button"
             onClick={() => {
-              onComplete((Date.now() - startedAt.current) / 60000, sessionTracks.length || undefined)
+              onComplete((Date.now() - startedAt.current) / 60000, spotify.connected ? sessionTracks.length : undefined)
               onClose()
             }}
             className="px-3 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"

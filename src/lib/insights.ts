@@ -1,4 +1,4 @@
-import { dayPercentComplete, percentComplete, totalMinutes, type Day, type Task } from '../db/models'
+import { dayPercentComplete, percentComplete, totalMinutes, type CompletionEvent, type Day, type Task } from '../db/models'
 import { parseDateKey } from './date'
 
 export const MIN_HISTORY_WEEKS = 4
@@ -140,4 +140,37 @@ export function energyCorrelation(tasks: Task[]): EnergyCorrelationRow[] {
       const list = buckets.get(r) as number[]
       return { rating: r, avgPercent: Math.round(list.reduce((s, p) => s + p, 0) / list.length), taskCount: list.length }
     })
+}
+
+export const MIN_FOCUS_SESSIONS = 3
+
+export interface MusicFocusRow {
+  withMusic: boolean
+  /** Average (actual / planned minutesPerSubtask) for that group's sessions — 100 means right on
+   *  pace, below 100 faster than planned, above 100 slower. */
+  avgPaceRatio: number
+  sessionCount: number
+}
+
+/** Epic 65: compares Focus Timer sessions where Spotify music was playing against sessions where
+ *  it wasn't (both must have had Spotify available — see spotifyTrackCount's doc comment), by how
+ *  close each group ran to its planned per-subtask time. Needs MIN_FOCUS_SESSIONS of *each* before
+ *  showing anything, since a lopsided sample (e.g. 1 no-music session) wouldn't mean much. */
+export function musicFocusCorrelation(tasks: Task[], events: CompletionEvent[]): MusicFocusRow[] {
+  const taskById = new Map(tasks.map((t) => [t.id, t]))
+  const withMusic: number[] = []
+  const withoutMusic: number[] = []
+  for (const e of events) {
+    if (e.spotifyTrackCount === undefined || e.sessionActualMinutes === undefined) continue
+    const task = taskById.get(e.taskId)
+    if (!task || task.minutesPerSubtask <= 0) continue
+    const paceRatio = (e.sessionActualMinutes / task.minutesPerSubtask) * 100
+    ;(e.spotifyTrackCount > 0 ? withMusic : withoutMusic).push(paceRatio)
+  }
+  if (withMusic.length < MIN_FOCUS_SESSIONS || withoutMusic.length < MIN_FOCUS_SESSIONS) return []
+  const avg = (list: number[]) => Math.round(list.reduce((s, n) => s + n, 0) / list.length)
+  return [
+    { withMusic: true, avgPaceRatio: avg(withMusic), sessionCount: withMusic.length },
+    { withMusic: false, avgPaceRatio: avg(withoutMusic), sessionCount: withoutMusic.length },
+  ]
 }
