@@ -36,5 +36,15 @@ drop policy if exists "records_delete_own" on public.records;
 create policy "records_delete_own" on public.records
   for delete using (auth.uid() = user_id);
 
--- Enables live cross-device/cross-tab updates (Supabase Realtime).
-alter publication supabase_realtime add table public.records;
+-- Enables live cross-device/cross-tab updates (Supabase Realtime). Guarded so re-running this
+-- whole script is always safe — `alter publication ... add table` has no built-in "if not already
+-- a member" form and errors on a second run otherwise.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'records'
+  ) then
+    alter publication supabase_realtime add table public.records;
+  end if;
+end $$;
