@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import OnboardingWizard from './components/OnboardingWizard'
@@ -16,6 +16,7 @@ import { checkReminders } from './lib/reminders'
 import { hasOnboarded } from './lib/onboarding'
 import { checkAutoBackup } from './lib/autoBackup'
 import { flushWebhookQueue } from './lib/webhookQueue'
+import { useSpotifyPlayer } from './context/SpotifyPlayerContext'
 
 const Stats = lazy(() => import('./pages/Stats'))
 const Calendar = lazy(() => import('./pages/Calendar'))
@@ -38,6 +39,7 @@ function Root() {
 export default function App() {
   const { settings } = useSettings()
   const { user } = useAuth()
+  const spotify = useSpotifyPlayer()
   const [showOnboarding, setShowOnboarding] = useState(() => !hasOnboarded())
 
   useEffect(() => {
@@ -45,9 +47,20 @@ export default function App() {
     checkAndAwardBadges()
   }, [])
 
+  // Epic 66: DND pairing — a ref (not an effect dependency) so play/pause doesn't restart this
+  // interval, but the check still reads live state, not a stale closure from mount time.
+  const spotifyPlayingRef = useRef(spotify.isPlaying)
   useEffect(() => {
-    checkReminders(settings)
-    const id = setInterval(() => checkReminders(settings), 60_000)
+    spotifyPlayingRef.current = spotify.isPlaying
+  }, [spotify.isPlaying])
+
+  useEffect(() => {
+    function run() {
+      if (settings.dndDuringFocusMusic && spotifyPlayingRef.current) return
+      checkReminders(settings)
+    }
+    run()
+    const id = setInterval(run, 60_000)
     return () => clearInterval(id)
   }, [settings])
 

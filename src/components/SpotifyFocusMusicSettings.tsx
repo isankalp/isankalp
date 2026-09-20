@@ -61,6 +61,21 @@ export default function SpotifyFocusMusicSettings() {
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
         <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-200 dark:border-slate-700">
           <div>
+            <p className="font-medium text-sm">Do Not Disturb while playing</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Mutes this app's own reminder notifications while Spotify focus music is playing.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings.dndDuringFocusMusic}
+            onChange={(e) => updateSettings({ dndDuringFocusMusic: e.target.checked })}
+            aria-label="Do Not Disturb while Spotify focus music is playing"
+            className="w-4 h-4 shrink-0"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div>
             <p className="font-medium text-sm">Generate a Deep Work playlist</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Creates a new private playlist in your Spotify account, seeded for focused work.

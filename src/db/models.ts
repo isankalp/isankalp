@@ -241,6 +241,10 @@ export interface Settings {
   focusMusicProfiles: Record<string, string>
   /** Playlist URI used when a task has no category, or its category has no profile above. */
   focusMusicDefaultPlaylist: string
+  /** Epic 66: mutes this app's own reminder notifications (Epic 6) while Spotify focus music
+   *  started from this app is playing — a real, enforceable "Do Not Disturb" scoped to what a
+   *  browser tab can actually control, not a fake OS-level DND toggle. */
+  dndDuringFocusMusic: boolean
 }
 
 export type CapacityMode = 'off' | 'daily' | 'weekly'
@@ -278,6 +282,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dashboardHiddenWidgets: [],
   focusMusicProfiles: {},
   focusMusicDefaultPlaylist: '',
+  dndDuringFocusMusic: true,
 }
 
 /** A single free-text daily journal entry (Epic 57's prerequisite — never built as its own "v5"
