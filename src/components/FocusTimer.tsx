@@ -18,7 +18,7 @@ export default function FocusTimer({
 }: {
   task: Task
   onClose: () => void
-  onComplete: (actualMinutes: number) => void
+  onComplete: (actualMinutes: number, spotifyTrackCount?: number) => void
 }) {
   const totalSeconds = Math.round(task.minutesPerSubtask * 60)
   const [remaining, setRemaining] = useState(totalSeconds)
@@ -58,6 +58,17 @@ export default function FocusTimer({
     setSpotifyStarting(false)
   }
 
+  // Epic 64: tracks distinct songs actually played during THIS session (not the account's wider
+  // listening history) for the recap shown once the session ends.
+  const [sessionTracks, setSessionTracks] = useState<{ name: string; artists: string }[]>([])
+  const lastTrackUriRef = useRef<string | null>(null)
+  useEffect(() => {
+    const track = spotify.currentTrack
+    if (!track || track.uri === lastTrackUriRef.current) return
+    lastTrackUriRef.current = track.uri
+    setSessionTracks((prev) => [...prev, { name: track.name, artists: track.artists.map((a) => a.name).join(', ') }])
+  }, [spotify.currentTrack])
+
   useEffect(() => {
     startedAt.current = Date.now()
     return () => stopAmbientSound()
@@ -85,7 +96,7 @@ export default function FocusTimer({
           <button
             type="button"
             onClick={() => {
-              onComplete((Date.now() - startedAt.current) / 60000)
+              onComplete((Date.now() - startedAt.current) / 60000, sessionTracks.length || undefined)
               onClose()
             }}
             className="px-3 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"
@@ -100,6 +111,20 @@ export default function FocusTimer({
             No
           </button>
         </div>
+        {sessionTracks.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-700 text-left">
+            <p className="text-[11px] font-medium text-indigo-700 dark:text-indigo-300 mb-1">
+              🎵 {sessionTracks.length} track{sessionTracks.length === 1 ? '' : 's'} played this session
+            </p>
+            <ul className="text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5 max-h-24 overflow-y-auto">
+              {sessionTracks.map((t, i) => (
+                <li key={i} className="truncate">
+                  {t.name} — {t.artists}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     )
   }

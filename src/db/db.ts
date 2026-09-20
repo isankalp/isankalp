@@ -299,10 +299,12 @@ export async function getSettings(): Promise<Settings> {
 
 /** Records a completedSubtasks change for Epic 10's time-of-day insight chart. Returns the event id so a
  *  positive (increment) change can optionally have a photo attached to it afterward (Epic 41). */
-export async function logCompletionEvent(taskId: string, delta: number): Promise<string | null> {
+export async function logCompletionEvent(taskId: string, delta: number, spotifyTrackCount?: number): Promise<string | null> {
   if (delta === 0) return null
   const id = uuid()
-  await db.completionEvents.add({ id, taskId, delta, at: Date.now() })
+  const event: CompletionEvent = { id, taskId, delta, at: Date.now() }
+  if (spotifyTrackCount) event.spotifyTrackCount = spotifyTrackCount
+  await db.completionEvents.add(event)
   return id
 }
 

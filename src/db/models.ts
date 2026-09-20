@@ -147,6 +147,9 @@ export interface CompletionEvent {
   /** Change in completedSubtasks (usually +1, can be negative for an undo). */
   delta: number
   at: number
+  /** Epic 64/65: distinct Spotify tracks played during the Focus Timer session that produced this
+   *  completion. Absent means no music was played (or this wasn't logged from a Focus session). */
+  spotifyTrackCount?: number
 }
 
 export interface VoiceNote {

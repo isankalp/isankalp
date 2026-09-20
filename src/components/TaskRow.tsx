@@ -83,7 +83,7 @@ export default function TaskRow({
     })
   }
 
-  async function commitCompleted(value: number, actualMinutes?: number) {
+  async function commitCompleted(value: number, actualMinutes?: number, spotifyTrackCount?: number) {
     const clamped = clampCompleted(value, task.totalSubtasks)
     if (clamped === task.completedSubtasks) return
     const wasComplete = complete
@@ -93,7 +93,7 @@ export default function TaskRow({
     }
     await commitField(patch, `Update "${task.title}" progress`)
     const delta = clamped - task.completedSubtasks
-    const eventId = await logCompletionEvent(task.id, delta)
+    const eventId = await logCompletionEvent(task.id, delta, spotifyTrackCount)
     const nowComplete = clamped === task.totalSubtasks && task.totalSubtasks > 0
     if (!wasComplete && nowComplete) {
       // Row is about to unmount (moves to the Completed section) — hand the photo prompt to the page level.
@@ -446,7 +446,7 @@ export default function TaskRow({
         <FocusTimer
           task={task}
           onClose={() => setFocusOpen(false)}
-          onComplete={(actualMinutes) => commitCompleted(task.completedSubtasks + 1, actualMinutes)}
+          onComplete={(actualMinutes, spotifyTrackCount) => commitCompleted(task.completedSubtasks + 1, actualMinutes, spotifyTrackCount)}
         />
       )}
 
