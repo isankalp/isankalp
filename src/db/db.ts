@@ -12,6 +12,9 @@ import {
   type CustomFieldDef,
   type Day,
   type Goal,
+  type GridCell,
+  type GridRow,
+  type GridSection,
   type Habit,
   type HabitLog,
   type JournalEntry,
@@ -45,6 +48,9 @@ export const ALL_TABLE_NAMES = [
   'journalEntries',
   'lifestyleFields',
   'lifestyleEntries',
+  'gridSections',
+  'gridRows',
+  'gridCells',
 ] as const
 
 export type TableName = (typeof ALL_TABLE_NAMES)[number]
@@ -68,6 +74,9 @@ export class GoalsDB extends Dexie {
   journalEntries!: Table<JournalEntry, string>
   lifestyleFields!: Table<LifestyleField, string>
   lifestyleEntries!: Table<LifestyleEntry, string>
+  gridSections!: Table<GridSection, string>
+  gridRows!: Table<GridRow, string>
+  gridCells!: Table<GridCell, string>
 
   constructor(name: string) {
     super(name)
@@ -220,6 +229,29 @@ export class GoalsDB extends Dexie {
       journalEntries: 'id, &date',
       lifestyleFields: 'id, order, archivedAt',
       lifestyleEntries: 'id, date, fieldId, &[date+fieldId]',
+    })
+    this.version(9).stores({
+      tasks: 'id, dayId, title, createdAt, templateId, dependsOnTaskId',
+      days: 'id, &date',
+      goals: 'id, title, archivedAt',
+      settings: 'id',
+      habits: 'id, archivedAt',
+      habitLogs: 'id, habitId, date, &[habitId+date]',
+      templates: 'id, archivedAt',
+      reviews: 'id, periodType, periodKey',
+      badges: 'id, type',
+      completionEvents: 'id, taskId, at',
+      voiceNotes: 'id, taskId, createdAt',
+      customFields: 'id, name',
+      taskHistory: 'id, taskId, at',
+      webhookQueue: 'id, createdAt',
+      completionPhotos: 'id, taskId, completionEventId, createdAt',
+      journalEntries: 'id, &date',
+      lifestyleFields: 'id, order, archivedAt',
+      lifestyleEntries: 'id, date, fieldId, &[date+fieldId]',
+      gridSections: 'id, order',
+      gridRows: 'id, sectionId, order',
+      gridCells: 'id, rowId, date, &[rowId+date]',
     })
   }
 }

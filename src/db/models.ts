@@ -245,7 +245,15 @@ export interface Settings {
    *  started from this app is playing — a real, enforceable "Do Not Disturb" scoped to what a
    *  browser tab can actually control, not a fake OS-level DND toggle. */
   dndDuringFocusMusic: boolean
+  /** DR-5: Grid view preferences, restored exactly as last set on the next visit. */
+  gridDensity: GridDensity
+  /** A GridSection id, or '' for no filter (DR-4). */
+  gridSectionFilter: string
+  /** The date column the grid was scrolled to when last left, so reopening restores position. */
+  gridScrollAnchorDate: string
 }
+
+export type GridDensity = 'compact' | 'comfortable'
 
 export type CapacityMode = 'off' | 'daily' | 'weekly'
 
@@ -283,6 +291,9 @@ export const DEFAULT_SETTINGS: Settings = {
   focusMusicProfiles: {},
   focusMusicDefaultPlaylist: '',
   dndDuringFocusMusic: true,
+  gridDensity: 'comfortable',
+  gridSectionFilter: '',
+  gridScrollAnchorDate: '',
 }
 
 /** A single free-text daily journal entry (Epic 57's prerequisite — never built as its own "v5"
@@ -348,6 +359,40 @@ export interface LifestyleEntry {
   durationMinutes?: number
   // Number
   numberValue?: number
+}
+
+// --- Habit/Task Grid (v13, Epics 74-78) ---
+
+/** A collapsible group of rows on the Grid page (Epic 75). Deleting one (SM-3) removes it and
+ *  every row/cell under it outright — unlike Lifestyle fields, there's no "keep history" case
+ *  called for here, since the PRD is explicit that delete removes checkbox history with it. */
+export interface GridSection {
+  id: string
+  title: string
+  order: number
+  collapsed: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/** A single tracked task/habit within a section (Epic 76). */
+export interface GridRow {
+  id: string
+  sectionId: string
+  title: string
+  order: number
+  createdAt: number
+  updatedAt: number
+}
+
+/** One row's completion mark for one date (Epic 77). Existence = checked; unchecking a cell
+ *  deletes the row rather than storing a false flag, keeping the table only as large as what's
+ *  actually been checked. Unique per (rowId, date). */
+export interface GridCell {
+  id: string
+  rowId: string
+  date: string // YYYY-MM-DD
+  createdAt: number
 }
 
 /** Clamp completedSubtasks into [0, totalSubtasks], rounding to whole units. */

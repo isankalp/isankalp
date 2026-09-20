@@ -29,6 +29,7 @@ const TimeBlocking = lazy(() => import('./pages/TimeBlocking'))
 const Ask = lazy(() => import('./pages/Ask'))
 const JournalInsights = lazy(() => import('./pages/JournalInsights'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Grid = lazy(() => import('./pages/Grid'))
 
 function Root() {
   const { settings } = useSettings()
@@ -102,6 +103,14 @@ export default function App() {
           }
         />
         <Route path="/goals" element={<Goals />} />
+        <Route
+          path="/grid"
+          element={
+            <Suspense fallback={null}>
+              <Grid />
+            </Suspense>
+          }
+        />
         <Route
           path="/stats"
           element={
