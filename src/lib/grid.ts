@@ -12,10 +12,10 @@ export function gridColumnWidthClass(density: GridDensity): string {
 
 export const GRID_COLUMN_WIDTH_PX: Record<GridDensity, number> = { compact: 28, comfortable: 40 }
 export const GRID_LABEL_WIDTH_PX = 160
-/** Width of the per-row controls strip (reorder/move/streak/delete) that sits pinned immediately
- *  after the label column. Must stay in sync with the header's corner spacer so date columns in
- *  the header line up exactly with the checkbox columns in every row. */
-export const GRID_CONTROLS_WIDTH_PX = 168
+/** Width of the per-row controls strip (reorder/move/delete) that sits pinned immediately after
+ *  the label column. Must stay in sync with the header's corner spacer so date columns in the
+ *  header line up exactly with the checkbox columns in every row. */
+export const GRID_CONTROLS_WIDTH_PX = 128
 export const GRID_PINNED_WIDTH_PX = GRID_LABEL_WIDTH_PX + GRID_CONTROLS_WIDTH_PX
 
 /** Epic 78 (DR-1): inclusive list of date keys running from `daysBefore` days before `anchorDate`

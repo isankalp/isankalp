@@ -12,8 +12,6 @@ import {
   isDuplicateRowNameInSection,
   nextOrder,
   rowCompletedDateKeys,
-  rowCompletionCount,
-  rowCurrentStreak,
   setGridCellRange,
   toggleGridCell,
 } from '../lib/grid'
@@ -36,8 +34,6 @@ export default function GridRowLine({ row, siblingRows, allRows, sections, cells
   const lastClickRef = useRef<string | null>(null)
 
   const checkedDates = rowCompletedDateKeys(cells, row.id)
-  const streak = rowCurrentStreak(cells, row.id)
-  const { completed } = rowCompletionCount(cells, row.id, 30)
   const duplicate = isDuplicateRowNameInSection(row.title, allRows, row.sectionId, row.id)
   const index = siblingRows.findIndex((r) => r.id === row.id)
 
@@ -160,9 +156,6 @@ export default function GridRowLine({ row, siblingRows, allRows, sections, cells
             ))}
           </select>
         )}
-        <span className="text-[10px] text-slate-400 whitespace-nowrap px-1" title="Current streak / completions in the last 30 days">
-          {streak > 0 ? `🔥${streak}` : `${completed}/30`}
-        </span>
         <div className="relative shrink-0">
           <button
             type="button"
