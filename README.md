@@ -59,6 +59,12 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
   - **Session listening recap** — shows the tracks actually played once a Focus Timer session ends.
   - **Music/focus insights** — a Stats → Insights chart comparing on-pace-vs-planned time for sessions with music vs without, once there's enough of each.
   - **Do Not Disturb pairing** — mutes this app's own reminder notifications while Spotify focus music is playing (there's no web API for real OS-level DND, so this is honestly scoped to what a browser tab can control).
+- **Lifestyle Tracking** — a "Lifestyle" entry point (top bar, or the Dashboard widget) opens a daily log for user-defined metrics, independent of tasks:
+  - **Custom fields** — define Yes/No, Duration, or Number fields with a success threshold (Yes/No's expected value and optional count cap; Duration/Number's min/max range), reorderable, editable, and deletable (deleting only hides a field going forward — its past logged entries stay intact and viewable).
+  - **Sleep-style duration auto-calculation** — a Duration field can auto-calculate from two labeled time inputs (e.g. Sleep Time/Wake Time) instead of direct entry, correctly handling overnight wraparound (wake numerically earlier than sleep means the next day) with a same-day override for naps, and rejecting a zero-length identical-times entry.
+  - **Frozen-at-save evaluation** — each day's entry is evaluated against the field's threshold *at save time* and that pass/fail result is stored with it, so editing a field's threshold later only ever affects future entries, never rewriting a day you already logged.
+  - **Lifestyle Calendar** — a month view, separate from the Task Calendar, colored green only when every configured field passed that day, red if even one failed or was left blank, and neutral if you never opened that day at all.
+- **Task Calendar** *(color rule rewritten this round)* — a day is now green only once every task on it is 100% complete, and red the instant even one isn't (never a percent gradient anymore); a day's aggregate completion percent — summed across every task's subtasks regardless of unit — shows separately in the day block's tooltip/detail, distinct from its binary color, and appears on the Dashboard's today card too. A future day with a scheduled-but-unstarted task is red exactly like a past one — timing never overrides incompleteness.
 
 ## Skipped this round
 

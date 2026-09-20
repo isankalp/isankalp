@@ -15,6 +15,8 @@ import {
   type Habit,
   type HabitLog,
   type JournalEntry,
+  type LifestyleEntry,
+  type LifestyleField,
   type Review,
   type Settings,
   type Task,
@@ -41,6 +43,8 @@ export const ALL_TABLE_NAMES = [
   'webhookQueue',
   'completionPhotos',
   'journalEntries',
+  'lifestyleFields',
+  'lifestyleEntries',
 ] as const
 
 export type TableName = (typeof ALL_TABLE_NAMES)[number]
@@ -62,6 +66,8 @@ export class GoalsDB extends Dexie {
   webhookQueue!: Table<WebhookQueueItem, string>
   completionPhotos!: Table<CompletionPhoto, string>
   journalEntries!: Table<JournalEntry, string>
+  lifestyleFields!: Table<LifestyleField, string>
+  lifestyleEntries!: Table<LifestyleEntry, string>
 
   constructor(name: string) {
     super(name)
@@ -195,6 +201,26 @@ export class GoalsDB extends Dexie {
             if (settings.autoTaggingEnabled === undefined) settings.autoTaggingEnabled = true
           })
       })
+    this.version(8).stores({
+      tasks: 'id, dayId, title, createdAt, templateId, dependsOnTaskId',
+      days: 'id, &date',
+      goals: 'id, title, archivedAt',
+      settings: 'id',
+      habits: 'id, archivedAt',
+      habitLogs: 'id, habitId, date, &[habitId+date]',
+      templates: 'id, archivedAt',
+      reviews: 'id, periodType, periodKey',
+      badges: 'id, type',
+      completionEvents: 'id, taskId, at',
+      voiceNotes: 'id, taskId, createdAt',
+      customFields: 'id, name',
+      taskHistory: 'id, taskId, at',
+      webhookQueue: 'id, createdAt',
+      completionPhotos: 'id, taskId, completionEventId, createdAt',
+      journalEntries: 'id, &date',
+      lifestyleFields: 'id, order, archivedAt',
+      lifestyleEntries: 'id, date, fieldId, &[date+fieldId]',
+    })
   }
 }
 

@@ -1,10 +1,12 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useState } from 'react'
 import { todayKey } from '../lib/date'
 import { useT } from '../lib/i18n'
 import clsx from 'clsx'
 import AuthHeaderControl from './AuthHeaderControl'
 import BadgeToast from './BadgeToast'
 import KeyboardShortcuts from './KeyboardShortcuts'
+import LifestyleModal from './LifestyleModal'
 import ProfileSwitcher from './ProfileSwitcher'
 import SpotifyMiniPlayer from './SpotifyMiniPlayer'
 import UndoBanner from './UndoBanner'
@@ -29,6 +31,7 @@ export default function Layout() {
   const location = useLocation()
   const t = useT()
   const { configured: aiConfigured } = useAiClient()
+  const [lifestyleOpen, setLifestyleOpen] = useState(false)
   const visibleLinks = aiConfigured
     ? [...links, { to: '/ask', label: 'Ask AI', match: '/ask' }, { to: '/journal', label: 'Journal', match: '/journal' }]
     : links
@@ -59,6 +62,13 @@ export default function Layout() {
               {t(link.label)}
             </NavLink>
           ))}
+          <button
+            type="button"
+            onClick={() => setLifestyleOpen(true)}
+            className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800"
+          >
+            {t('Lifestyle')}
+          </button>
         </nav>
       </header>
       <UnverifiedEmailBanner />
@@ -69,6 +79,7 @@ export default function Layout() {
       <UndoBanner />
       <KeyboardShortcuts />
       <SpotifyMiniPlayer />
+      {lifestyleOpen && <LifestyleModal onClose={() => setLifestyleOpen(false)} />}
     </div>
   )
 }

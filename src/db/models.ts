@@ -193,7 +193,7 @@ export interface CompletionPhoto {
 
 export type DefaultView = 'dashboard' | 'today' | 'week'
 
-export const DASHBOARD_WIDGET_IDS = ['goals', 'habits'] as const
+export const DASHBOARD_WIDGET_IDS = ['goals', 'habits', 'lifestyle'] as const
 export type DashboardWidgetId = (typeof DASHBOARD_WIDGET_IDS)[number]
 export type Theme = 'light' | 'dark'
 export type CompletedBehavior = 'move' | 'in-place'
@@ -295,6 +295,61 @@ export interface JournalEntry {
   updatedAt: number
 }
 
+// --- Lifestyle Tracking (v12, Epics 68-71) ---
+
+export type LifestyleFieldType = 'boolean' | 'duration' | 'number'
+
+/**
+ * A user-defined lifestyle metric and its success threshold (Epic 69). Deleting one (LF-5) sets
+ * archivedAt rather than removing the row, so past LifestyleEntry rows that reference it by id
+ * stay fully resolvable (name, type, threshold) in a past day's record.
+ */
+export interface LifestyleField {
+  id: string
+  name: string
+  type: LifestyleFieldType
+  order: number
+  archivedAt?: number
+  createdAt: number
+  updatedAt: number
+  /** Boolean: LE-3/LF-2 — the value that counts as a pass, plus an optional "count if yes" cap. */
+  booleanExpected?: boolean
+  booleanCountEnabled?: boolean
+  booleanCountMax?: number
+  /** Duration: LF-2/LF-3 — either a direct min/max range in minutes, or (if durationAutoCalc) two
+   *  labeled time sub-fields the daily entry modal renders instead of a direct duration input. */
+  durationAutoCalc?: boolean
+  durationStartLabel?: string
+  durationEndLabel?: string
+  durationMinMinutes?: number
+  durationMaxMinutes?: number
+  /** Number: LF-2 — a min and/or max limit. */
+  numberMin?: number
+  numberMax?: number
+}
+
+/** One field's logged value for one day (Epic 68). `passed` is evaluated against the field's
+ *  threshold at save time and frozen — editing the field's threshold later (LF-4) never
+ *  retroactively changes an already-saved entry's pass/fail state. */
+export interface LifestyleEntry {
+  id: string
+  date: string // YYYY-MM-DD
+  fieldId: string
+  passed: boolean
+  updatedAt: number
+  // Boolean
+  boolValue?: boolean
+  countValue?: number
+  // Duration — raw inputs kept alongside the calculated value so they can be re-edited (ST-5: the
+  // calculated value, not the raw times, is what's evaluated).
+  startTime?: string // "HH:MM"
+  endTime?: string // "HH:MM"
+  sameDay?: boolean // ST-3
+  durationMinutes?: number
+  // Number
+  numberValue?: number
+}
+
 /** Clamp completedSubtasks into [0, totalSubtasks], rounding to whole units. */
 export function clampCompleted(completed: number, totalSubtasks: number): number {
   const total = Math.max(0, Math.floor(totalSubtasks) || 0)
@@ -331,6 +386,26 @@ export function dayPercentComplete(tasks: Task[]): number {
   const planned = dayMinutesPlanned(tasks)
   if (planned <= 0) return 0
   return Math.round((dayMinutesDone(tasks) / planned) * 100)
+}
+
+export type DayCompletionState = 'complete' | 'incomplete' | 'none'
+
+/** Epic 72 (TC-1/TC-2/TC-3/TC-5): binary, not gradient — a day is only ever fully green or fully
+ *  red, driven purely by whether every task on it is complete, never by timing (a future day with
+ *  an unstarted task is incomplete exactly like a past one). */
+export function dayCompletionState(tasks: Task[]): DayCompletionState {
+  if (tasks.length === 0) return 'none'
+  return tasks.every((t) => isTaskComplete(t)) ? 'complete' : 'incomplete'
+}
+
+/** Epic 73 (DP-1/DP-5): unit-agnostic aggregate percent — sums completedSubtasks/totalSubtasks
+ *  across every task on the day regardless of unit, distinct from dayPercentComplete's
+ *  minutes-weighted number. null (never "0%") for a day with no tasks. */
+export function dayAggregatePercent(tasks: Task[]): number | null {
+  const totalSum = tasks.reduce((s, t) => s + t.totalSubtasks, 0)
+  if (totalSum <= 0) return null
+  const doneSum = tasks.reduce((s, t) => s + t.completedSubtasks, 0)
+  return Math.round((doneSum / totalSum) * 100)
 }
 
 const PRIORITY_RANK: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 }

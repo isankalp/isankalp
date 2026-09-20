@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampCompleted,
+  dayAggregatePercent,
+  dayCompletionState,
   dayMinutesDone,
   dayMinutesPlanned,
   dayPercentComplete,
@@ -132,6 +134,43 @@ describe('day rollups', () => {
 
   it('is 0% for a day with no tasks', () => {
     expect(dayPercentComplete([])).toBe(0)
+  })
+})
+
+describe('dayCompletionState (Epic 72: binary, never gradient)', () => {
+  it('is none for a day with no tasks', () => {
+    expect(dayCompletionState([])).toBe('none')
+  })
+
+  it('is complete only when every task is complete', () => {
+    const tasks = [
+      makeTask({ id: 't1', totalSubtasks: 5, completedSubtasks: 5 }),
+      makeTask({ id: 't2', totalSubtasks: 3, completedSubtasks: 3 }),
+    ]
+    expect(dayCompletionState(tasks)).toBe('complete')
+  })
+
+  it('is incomplete if any single task is not fully done, regardless of the others', () => {
+    const tasks = [
+      makeTask({ id: 't1', totalSubtasks: 5, completedSubtasks: 5 }),
+      makeTask({ id: 't2', totalSubtasks: 3, completedSubtasks: 0 }),
+    ]
+    expect(dayCompletionState(tasks)).toBe('incomplete')
+  })
+})
+
+describe('dayAggregatePercent (Epic 73: unit-agnostic, subtask-count based)', () => {
+  it('is null (never 0) for a day with no tasks', () => {
+    expect(dayAggregatePercent([])).toBeNull()
+  })
+
+  it('sums completedSubtasks/totalSubtasks across tasks regardless of unit', () => {
+    const tasks = [
+      makeTask({ id: 't1', unit: 'minutes', totalSubtasks: 10, completedSubtasks: 5 }),
+      makeTask({ id: 't2', unit: 'pages', minutesPerSubtask: 1, totalSubtasks: 10, completedSubtasks: 10 }),
+    ]
+    // (5 + 10) / (10 + 10) = 75%, independent of minutesPerSubtask weighting
+    expect(dayAggregatePercent(tasks)).toBe(75)
   })
 })
 

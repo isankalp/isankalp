@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from '../hooks/useLiveQuery'
 import { db } from '../db/db'
 import HabitWidget from '../components/HabitWidget'
+import LifestyleModal from '../components/LifestyleModal'
 import { useSettings } from '../context/SettingsContext'
 import {
-  dayMinutesDone,
-  dayMinutesPlanned,
-  dayPercentComplete,
+  DASHBOARD_WIDGET_IDS,
+  dayAggregatePercent,
   isTaskComplete,
   minutesDone as taskMinutesDone,
   totalMinutes as taskTotalMinutes,
@@ -15,12 +15,14 @@ import {
   type Goal,
   type Task,
 } from '../db/models'
+import { lifestyleDayState } from '../lib/lifestyle'
 import { completedDateKeys, currentStreak } from '../lib/streaks'
 import { todayKey } from '../lib/date'
 
 const WIDGET_LABELS: Record<DashboardWidgetId, string> = {
   goals: 'Goals',
   habits: 'Habits',
+  lifestyle: 'Lifestyle',
 }
 
 function GoalsWidget() {
@@ -80,15 +82,48 @@ function HabitsWidget() {
   )
 }
 
-const WIDGETS: Record<DashboardWidgetId, () => React.JSX.Element> = {
+function LifestyleWidget({ onOpen }: { onOpen: () => void }) {
+  const today = todayKey()
+  const fields = useLiveQuery(() => db.lifestyleFields.toArray(), []) ?? []
+  const activeFieldIds = fields.filter((f) => !f.archivedAt).map((f) => f.id)
+  const todayEntries = useLiveQuery(() => db.lifestyleEntries.where('date').equals(today).toArray(), [today]) ?? []
+  const state = lifestyleDayState(todayEntries, activeFieldIds)
+  const stateLabel = state === 'pass' ? 'All targets met today' : state === 'fail' ? 'Needs attention today' : 'No entry yet today'
+  const stateColor =
+    state === 'pass'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : state === 'fail'
+        ? 'text-red-700 dark:text-red-400'
+        : 'text-slate-500 dark:text-slate-400'
+
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold">Lifestyle</h3>
+        <button type="button" onClick={onOpen} className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline">
+          Log
+        </button>
+      </div>
+      {activeFieldIds.length === 0 ? (
+        <p className="text-xs text-slate-500 dark:text-slate-400">No lifestyle fields configured yet.</p>
+      ) : (
+        <p className={`text-xs font-medium ${stateColor}`}>{stateLabel}</p>
+      )}
+    </div>
+  )
+}
+
+const WIDGETS: Record<DashboardWidgetId, (props: { onOpenLifestyle: () => void }) => React.JSX.Element> = {
   goals: GoalsWidget,
   habits: HabitsWidget,
+  lifestyle: ({ onOpenLifestyle }) => <LifestyleWidget onOpen={onOpenLifestyle} />,
 }
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { settings, updateSettings } = useSettings()
   const [customizing, setCustomizing] = useState(false)
+  const [lifestyleOpen, setLifestyleOpen] = useState(false)
   const today = todayKey()
 
   const day = useLiveQuery(() => db.days.where('date').equals(today).first(), [today])
@@ -99,19 +134,27 @@ export default function Dashboard() {
   const everHadAnyTask = useLiveQuery(() => db.tasks.count(), []) ?? 0
   const everHadAnyGoal = useLiveQuery(() => db.goals.count(), []) ?? 0
 
-  const planned = dayMinutesPlanned(tasks)
-  const done = dayMinutesDone(tasks)
-  const percent = dayPercentComplete(tasks)
+  // DP-1/DP-4/DP-5: unit-agnostic aggregate percent, not the old minutes-weighted dayPercentComplete.
+  const aggregatePercent = dayAggregatePercent(tasks)
+  const completedSubtasksToday = tasks.reduce((s, t) => s + t.completedSubtasks, 0)
+  const totalSubtasksToday = tasks.reduce((s, t) => s + t.totalSubtasks, 0)
   const remaining = tasks.filter((t) => !isTaskComplete(t)).length
   const streak = currentStreak(completedDateKeys(days, allTasksForStreak))
   const pending = tasks.filter((t: Task) => !isTaskComplete(t)).slice(0, 5)
+
+  // Epic 67 shipped with only goals/habits; this folds in any widget id (like lifestyle) added
+  // since, so an existing account's saved order still picks up new widgets instead of hiding them.
+  const widgetOrder = [
+    ...settings.dashboardWidgetOrder,
+    ...DASHBOARD_WIDGET_IDS.filter((id) => !settings.dashboardWidgetOrder.includes(id)),
+  ]
 
   function openTask(taskId: string) {
     navigate(`/day/${today}?task=${taskId}`)
   }
 
   function moveWidget(id: DashboardWidgetId, direction: -1 | 1) {
-    const order = [...settings.dashboardWidgetOrder]
+    const order = [...widgetOrder]
     const index = order.indexOf(id)
     const swapWith = index + direction
     if (swapWith < 0 || swapWith >= order.length) return
@@ -168,9 +211,9 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-3 gap-2 mb-4">
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-center">
-          <p className="text-lg font-bold">{percent}%</p>
+          <p className="text-lg font-bold">{aggregatePercent === null ? '–' : `${aggregatePercent}%`}</p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            {done}/{planned} min today
+            {totalSubtasksToday > 0 ? `${completedSubtasksToday}/${totalSubtasksToday} subtasks today` : 'No tasks today'}
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-center">
@@ -218,7 +261,7 @@ export default function Dashboard() {
       </div>
 
       <div className="space-y-3">
-        {settings.dashboardWidgetOrder.map((id) => {
+        {widgetOrder.map((id) => {
           if (!customizing && settings.dashboardHiddenWidgets.includes(id)) return null
           const Widget = WIDGETS[id]
           return (
@@ -241,7 +284,9 @@ export default function Dashboard() {
                   </button>
                 </div>
               )}
-              {(!customizing || !settings.dashboardHiddenWidgets.includes(id)) && <Widget />}
+              {(!customizing || !settings.dashboardHiddenWidgets.includes(id)) && (
+                <Widget onOpenLifestyle={() => setLifestyleOpen(true)} />
+              )}
               {customizing && settings.dashboardHiddenWidgets.includes(id) && (
                 <p className="text-[11px] text-slate-400 italic">Hidden</p>
               )}
@@ -249,6 +294,7 @@ export default function Dashboard() {
           )
         })}
       </div>
+      {lifestyleOpen && <LifestyleModal onClose={() => setLifestyleOpen(false)} />}
     </div>
   )
 }
