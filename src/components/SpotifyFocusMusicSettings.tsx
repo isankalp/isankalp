@@ -4,6 +4,7 @@ import { db } from '../db/db'
 import { useSettings } from '../context/SettingsContext'
 import { useSpotifyPlayer } from '../context/SpotifyPlayerContext'
 import { fetchUserPlaylists, type SpotifyPlaylist } from '../lib/spotifyPlayback'
+import { generateDeepWorkPlaylist } from '../lib/spotifyDeepWork'
 
 // Epic 62: maps a task's category to a Spotify playlist, so Focus Timer can pre-select (never
 // auto-play) the right music for the kind of work being done, instead of always defaulting to
@@ -12,17 +13,22 @@ export default function SpotifyFocusMusicSettings() {
   const { connected } = useSpotifyPlayer()
   const { settings, updateSettings } = useSettings()
   const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([])
+  const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [generateMessage, setGenerateMessage] = useState<string | null>(null)
 
   const categorizedTasks = useLiveQuery(() => db.tasks.filter((t) => !!t.category).toArray(), []) ?? []
   const categoryLabels = Array.from(new Set(categorizedTasks.map((t) => t.category!.label))).sort()
 
   useEffect(() => {
     if (!connected) return
-    fetchUserPlaylists().then((result) => {
-      if (result.ok) setPlaylists(result.data)
-      else setError(result.error)
-    })
+    fetchUserPlaylists()
+      .then((result) => {
+        if (result.ok) setPlaylists(result.data)
+        else setError(result.error)
+      })
+      .finally(() => setLoaded(true))
   }, [connected])
 
   if (!connected) return null
@@ -34,12 +40,45 @@ export default function SpotifyFocusMusicSettings() {
     updateSettings({ focusMusicProfiles: next })
   }
 
+  // Epic 63: builds a brand-new private playlist in the user's own Spotify account from a handful
+  // of focus-oriented search terms — a genuine new playlist, not just picking one that exists.
+  async function handleGenerateDeepWork() {
+    setGenerating(true)
+    setGenerateMessage(null)
+    const result = await generateDeepWorkPlaylist(`Deep Work — Goals Tracker ${new Date().toLocaleDateString()}`)
+    if (result.ok) {
+      setPlaylists((prev) => [result.data, ...prev])
+      setGenerateMessage(`Created "${result.data.name}" with ${result.data.trackCount} tracks — assign it below.`)
+    } else {
+      setGenerateMessage(result.error)
+    }
+    setGenerating(false)
+  }
+
   return (
     <>
       <h2 className="text-lg font-bold mt-6 mb-3">Focus Music</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
+        <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div>
+            <p className="font-medium text-sm">Generate a Deep Work playlist</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Creates a new private playlist in your Spotify account, seeded for focused work.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerateDeepWork}
+            disabled={generating}
+            className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
+          >
+            {generating ? 'Generating…' : '✨ Generate'}
+          </button>
+        </div>
+        {generateMessage && <p className="text-xs text-slate-500 dark:text-slate-400 pb-2">{generateMessage}</p>}
+
         {error && <p className="text-xs text-red-600 dark:text-red-400 py-2">{error}</p>}
-        {playlists.length === 0 && !error ? (
+        {!loaded ? (
           <p className="text-xs text-slate-500 dark:text-slate-400 py-3">Loading your playlists…</p>
         ) : (
           <>
