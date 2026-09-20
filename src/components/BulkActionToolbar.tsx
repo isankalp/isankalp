@@ -150,7 +150,7 @@ export default function BulkActionToolbar({ selectedTasks, onDone }: { selectedT
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4" onClick={() => setConfirmDelete(false)}>
           <div
-            className="bg-white dark:bg-slate-800 rounded-lg border border-red-300 dark:border-red-700 w-full max-w-sm p-4"
+            className="bg-white dark:bg-slate-800 rounded-lg border border-red-300 dark:border-red-700 w-full max-w-sm max-h-[85vh] overflow-y-auto p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-semibold text-sm text-red-600 dark:text-red-400 mb-2">

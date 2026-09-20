@@ -67,7 +67,7 @@ export default function DataMigrationPrompt() {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-sm p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-sm max-h-[85vh] overflow-y-auto p-4">
         <h3 className="font-semibold text-sm mb-1">Import your existing data into this account?</h3>
 
         {status === 'error' && (

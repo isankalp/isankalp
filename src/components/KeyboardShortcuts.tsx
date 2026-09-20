@@ -77,7 +77,7 @@ export default function KeyboardShortcuts() {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setOverlayOpen(false)}>
       <div
-        className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-sm p-4"
+        className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-sm max-h-[85vh] overflow-y-auto p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="font-semibold text-sm mb-3">Keyboard Shortcuts</h3>

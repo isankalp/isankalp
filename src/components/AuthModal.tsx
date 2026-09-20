@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { isPasswordValid } from '../lib/passwordPolicy'
 import { getLockoutStatus, recordFailedLoginAttempt, recordSuccessfulLogin } from '../lib/authLockout'
@@ -115,10 +116,14 @@ export default function AuthModal({
 
   const title = mode === 'signup' ? 'Sign Up' : mode === 'login' ? 'Log In' : 'Reset your password'
 
-  return (
+  // Rendered outside the header via a portal: the header uses backdrop-blur, and a backdrop-filter
+  // ancestor creates a new containing block for `position: fixed` descendants in modern browsers —
+  // without this, the modal ends up positioned relative to the header's own box instead of the
+  // viewport, rendering squished into its height instead of centered on screen.
+  return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4" onClick={onClose}>
       <div
-        className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-sm p-4"
+        className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-sm max-h-[85vh] overflow-y-auto p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
@@ -244,6 +249,7 @@ export default function AuthModal({
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

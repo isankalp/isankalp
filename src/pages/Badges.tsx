@@ -54,7 +54,7 @@ export default function Badges() {
       {selected && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={() => setSelected(null)}>
           <div
-            className="bg-white dark:bg-slate-800 rounded-lg p-4 max-w-xs w-full text-center"
+            className="bg-white dark:bg-slate-800 rounded-lg p-4 max-w-xs w-full max-h-[85vh] overflow-y-auto text-center"
             onClick={(e) => e.stopPropagation()}
           >
             <span className="text-4xl">{selected.type === 'streak' ? '🔥' : '⏱️'}</span>

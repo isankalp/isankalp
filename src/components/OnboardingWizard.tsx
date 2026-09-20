@@ -59,7 +59,7 @@ export default function OnboardingWizard({ onFinish }: { onFinish: () => void })
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-md p-5">
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 w-full max-w-md max-h-[85vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold">Welcome to Goals Tracker</h2>
           {step !== 'done' && (
