@@ -6,6 +6,7 @@ import AuthHeaderControl from './AuthHeaderControl'
 import BadgeToast from './BadgeToast'
 import KeyboardShortcuts from './KeyboardShortcuts'
 import ProfileSwitcher from './ProfileSwitcher'
+import SpotifyMiniPlayer from './SpotifyMiniPlayer'
 import UndoBanner from './UndoBanner'
 import UnverifiedEmailBanner from './UnverifiedEmailBanner'
 import { useAiClient } from '../hooks/useAiClient'
@@ -67,6 +68,7 @@ export default function Layout() {
       <BadgeToast />
       <UndoBanner />
       <KeyboardShortcuts />
+      <SpotifyMiniPlayer />
     </div>
   )
 }

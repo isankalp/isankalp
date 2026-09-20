@@ -46,3 +46,32 @@ export async function disconnectSpotify(): Promise<{ ok: true } | { ok: false; e
 export async function getSpotifyAccessToken(): Promise<{ ok: true; data: SpotifyAccessToken } | { ok: false; error: string }> {
   return invoke<SpotifyAccessToken>('spotify-token')
 }
+
+let cachedToken: { token: string; expiresAt: number } | null = null
+const TOKEN_SAFETY_BUFFER_MS = 30_000
+
+async function ensureAccessToken(): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+  if (cachedToken && cachedToken.expiresAt - Date.now() > TOKEN_SAFETY_BUFFER_MS) {
+    return { ok: true, token: cachedToken.token }
+  }
+  const result = await getSpotifyAccessToken()
+  if (!result.ok) return result
+  cachedToken = { token: result.data.access_token, expiresAt: Date.parse(result.data.expires_at) }
+  return { ok: true, token: cachedToken.token }
+}
+
+/** Calls the Spotify Web API directly from the browser with a short-lived access token fetched
+ *  (and cached client-side until near expiry) on demand — the only Spotify credential the browser
+ *  ever holds; the refresh token and client secret stay in spotify-token's server-side code. */
+export async function spotifyApiFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<{ ok: true; response: Response } | { ok: false; error: string }> {
+  const tokenResult = await ensureAccessToken()
+  if (!tokenResult.ok) return tokenResult
+  const response = await fetch(`https://api.spotify.com/v1${path}`, {
+    ...init,
+    headers: { ...init.headers, Authorization: `Bearer ${tokenResult.token}`, 'Content-Type': 'application/json' },
+  })
+  return { ok: true, response }
+}

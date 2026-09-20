@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Task } from '../db/models'
 import { AMBIENT_SOUND_OPTIONS, playAmbientSound, stopAmbientSound, type AmbientSoundType } from '../lib/ambientSound'
+import { useSpotifyPlayer } from '../context/SpotifyPlayerContext'
+import { fetchUserPlaylists, type SpotifyPlaylist } from '../lib/spotifyPlayback'
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60)
@@ -24,6 +26,29 @@ export default function FocusTimer({
   const startedAt = useRef(0)
   const [ambientSound, setAmbientSound] = useState<AmbientSoundType>('none')
   const [muted, setMuted] = useState(false)
+
+  const spotify = useSpotifyPlayer()
+  const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([])
+  const [selectedPlaylistUri, setSelectedPlaylistUri] = useState('')
+  const [spotifyStarting, setSpotifyStarting] = useState(false)
+
+  useEffect(() => {
+    if (!spotify.connected) return
+    fetchUserPlaylists().then((result) => {
+      if (result.ok && result.data.length > 0) {
+        setPlaylists(result.data)
+        setSelectedPlaylistUri((prev) => prev || result.data[0].uri)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once per session, not on every spotify context change
+  }, [spotify.connected])
+
+  async function handlePlayFocusMusic() {
+    if (!selectedPlaylistUri) return
+    setSpotifyStarting(true)
+    await spotify.playContext(selectedPlaylistUri)
+    setSpotifyStarting(false)
+  }
 
   useEffect(() => {
     startedAt.current = Date.now()
@@ -116,6 +141,32 @@ export default function FocusTimer({
           </button>
         )}
       </div>
+      {spotify.connected && playlists.length > 0 && (
+        <div className="flex items-center justify-center gap-1.5 mt-2 text-[11px] flex-wrap">
+          <span className="text-indigo-600 dark:text-indigo-400">🎵 Focus music:</span>
+          <select
+            value={selectedPlaylistUri}
+            onChange={(e) => setSelectedPlaylistUri(e.target.value)}
+            aria-label="Focus music playlist"
+            className="px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-slate-800 max-w-[10rem]"
+          >
+            {playlists.map((p) => (
+              <option key={p.id} value={p.uri}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handlePlayFocusMusic}
+            disabled={spotifyStarting}
+            className="px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 disabled:opacity-50"
+          >
+            {spotifyStarting ? '…' : spotify.isPlaying ? 'Playing' : 'Play'}
+          </button>
+        </div>
+      )}
+      {spotify.error && <p className="text-[11px] text-red-600 dark:text-red-400 mt-1">{spotify.error}</p>}
     </div>
   )
 }
