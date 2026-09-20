@@ -50,6 +50,15 @@ A personal goal tracker built around **subtasks × minutes per subtask** instead
   - **AI Recaps & Diagnosis** — a narrative weekly recap and a streak-break diagnosis, each grounded strictly in your own logged numbers — every figure the AI states is checked against the real data it was given, and the response is discarded (never shown) if it states anything that doesn't match.
   - **Ask AI** — a chat panel over your own task/journal history, every answer citing the specific dates it drew from (tap through to the day), explicitly saying so rather than guessing when something isn't in your history.
   - **Journal & Journal Coaching** — a simple daily journal entry, plus a tone-calibrated coaching note and recurring-theme surfacing once you have enough entries — both read only what you actually wrote, never inferring an unstated mood. Independently toggleable off in Settings → AI even with AI otherwise enabled.
+- **Dashboard** — a customizable home page (today's progress, streak, remaining-task count, reorderable/hideable Goals & Habits widgets, a pending-tasks list) alongside the existing day view (now a "Tasks" tab). New accounts land here by default; existing users' saved default view is untouched.
+- **Spotify Focus Integration** *(optional, needs your own Spotify app + setup — see below)* — invisible everywhere until connected in Settings → Integrations:
+  - **Account connection** — standard OAuth; the refresh token and your app's client secret never reach the browser, only a short-lived access token fetched on demand.
+  - **In-app playback & mini-player** — starts a chosen playlist during a Focus Timer session via the Web Playback SDK, with a persistent mini-player (track, play/pause, skip, dismiss) while it's running.
+  - **Task-type playlist profiles** — map a task category to a playlist (plus one default) in Settings → Focus Music; Focus Timer pre-selects it, never auto-plays.
+  - **Deep Work playlist generation** — creates a real new private playlist in your own Spotify account, seeded from focus-oriented search terms.
+  - **Session listening recap** — shows the tracks actually played once a Focus Timer session ends.
+  - **Music/focus insights** — a Stats → Insights chart comparing on-pace-vs-planned time for sessions with music vs without, once there's enough of each.
+  - **Do Not Disturb pairing** — mutes this app's own reminder notifications while Spotify focus music is playing (there's no web API for real OS-level DND, so this is honestly scoped to what a browser tab can control).
 
 ## Skipped this round
 
@@ -59,13 +68,15 @@ Accounts are one exception — real Sign Up/Log In/password reset/session manage
 
 AI features are the other exception — real Claude API calls (see **AI setup** below), bring-your-own-key. "Grounded in your own data" is enforced as best it can be from the client: every number an AI recap/diagnosis states is checked against the real figures it was given and discarded if it doesn't match, and Q&A/breakdown prompts only ever see the specific data assembled for that request — but an LLM's output still can't be *guaranteed* perfectly grounded the way a database query can, so treat AI-stated figures as a best-effort summary of your real data, not the source of truth (that's always Stats/Calendar). The AI request-usage counter in Settings is this app's own count, not a verified read of your Anthropic billing dashboard, since there's no browser-safe API for that.
 
+Spotify Focus Integration is the third — real OAuth, in-app playback, and playlist generation (see **Spotify Focus Integration setup** below), needing your own Spotify Premium account and a Spotify app registration. Two honest limitations: in-app playback needs a Web Playback SDK access token in the browser by design (Spotify's own architecture), so "no access token ever used client-side" isn't literally achievable — what's actually enforced is that the *refresh token* and *client secret* never leave the server (see that section's architecture note); and "Do Not Disturb pairing" only mutes this app's own notifications, since no web API can toggle real OS-level Do Not Disturb.
+
 ## Data model
 
 `Task` stores `minutesPerSubtask`, `totalSubtasks`, and `completedSubtasks` (clamped `0..totalSubtasks`); `totalMinutes`, `minutesDone`, `percentComplete`, and `isComplete` are all derived, never stored as raw truth. Each `Task` belongs to a `Day` (`YYYY-MM-DD`); `Goal`s optionally link a set of task titles to aggregate across days.
 
 ## Stack
 
-React + TypeScript + Vite + Tailwind CSS v4, local-first persistence via IndexedDB ([Dexie.js](https://dexie.org/)) — no backend required for task tracking. Charts via [Recharts](https://recharts.org/). Client-side routing via React Router. Accounts (optional) are backed by [Supabase](https://supabase.com) (`@supabase/supabase-js`), loaded on demand so it adds nothing to the bundle when unconfigured. AI features (optional) call the Claude API directly from the browser with your own key — no extra dependency, no server of this app's own involved.
+React + TypeScript + Vite + Tailwind CSS v4, local-first persistence via IndexedDB ([Dexie.js](https://dexie.org/)) — no backend required for task tracking. Charts via [Recharts](https://recharts.org/). Client-side routing via React Router. Accounts (optional) are backed by [Supabase](https://supabase.com) (`@supabase/supabase-js`), loaded on demand so it adds nothing to the bundle when unconfigured. AI features (optional) call the Claude API directly from the browser with your own key — no extra dependency, no server of this app's own involved. Spotify Focus Integration (optional) uses Supabase Edge Functions (Deno) for everything token-sensitive, and loads the Spotify Web Playback SDK script at runtime only once connected — neither adds anything to the bundle otherwise.
 
 ## Development
 
@@ -101,3 +112,16 @@ Every AI feature is hidden entirely until configured — nothing else in the app
 3. That's it — Break Down with AI, the free-form command bar, AI Quick-Add, AI recaps/diagnosis, Ask AI, and Journal Coaching all become available immediately.
 
 **Architecture note**: the key is stored the same way as the rest of your settings — locally in this browser, or synced to your account's cloud data if you're also logged in (Epic 58/AK-1's "stored securely" means RLS-protected like your other cloud data when logged in, or browser-local storage otherwise — there's no separate encryption layer beyond that). It's used directly from the browser via `fetch()` to `https://api.anthropic.com`, using Anthropic's own documented `anthropic-dangerous-direct-browser-access` header for exactly this bring-your-own-key pattern — never sent to, or proxied through, any server of this app's own. It's masked (e.g. `sk-ant...ab12`) in the UI after saving and never shown in full again; use Replace/Remove Key in Settings to change or clear it.
+
+## Spotify Focus Integration setup (optional)
+
+Needs both Accounts (above) and a Spotify Premium account (in-app playback requires it) — everything under Settings → Integrations/Focus Music is hidden until configured.
+
+1. Create an app at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). Note its Client ID and Client Secret (rotate the secret immediately if it's ever been pasted anywhere other than your own terminal/secrets manager).
+2. In your Spotify app's settings, add a Redirect URI of exactly `<your Supabase project URL>/functions/v1/spotify-oauth-callback`.
+3. Run `supabase/spotify_schema.sql` once in your Supabase project's SQL Editor. This creates `spotify_connections` with **no** client-facing row-level-security policies at all — only the Edge Functions below (using the service-role key) can ever read or write it, so a refresh token can't reach the browser even by a client-side bug.
+4. Deploy the five Edge Functions in `supabase/functions/` with the Supabase CLI: `supabase functions deploy spotify-start spotify-oauth-callback spotify-token spotify-status spotify-disconnect`.
+5. Set their secrets (see `supabase/functions/.env.example` for what each one is): `supabase secrets set SPOTIFY_CLIENT_ID=... SPOTIFY_CLIENT_SECRET=... SPOTIFY_STATE_SECRET=... APP_URL=...`. Never paste the Client Secret into chat, a commit, or anywhere but this command in your own terminal.
+6. In the app, go to Settings → Integrations and connect Spotify.
+
+**Architecture note**: the literal "no access token used client-side" reading of a Spotify integration isn't achievable — the Web Playback SDK that plays audio in-browser fundamentally needs one. What's actually enforced instead: the long-lived refresh token and the Client Secret never leave the `spotify-token` Edge Function; the browser only ever holds a short-lived access token, fetched on demand and refreshed server-side before it expires. The OAuth `state` param is HMAC-signed by `spotify-start` so `spotify-oauth-callback` — reached via a plain top-level redirect from Spotify with no session of its own — can recover which Supabase user started the flow without trusting anything unverified.
