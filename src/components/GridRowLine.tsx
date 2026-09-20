@@ -4,6 +4,7 @@ import { db } from '../db/db'
 import type { GridCell, GridDensity, GridRow, GridSection } from '../db/models'
 import {
   GRID_COLUMN_WIDTH_PX,
+  GRID_CONTROLS_WIDTH_PX,
   GRID_LABEL_WIDTH_PX,
   dateRangeBetween,
   deleteGridRow,
@@ -123,7 +124,10 @@ export default function GridRowLine({ row, siblingRows, allRows, sections, cells
         )}
       </div>
 
-      <div className="shrink-0 flex items-center gap-0.5 px-1 border-r border-slate-200 dark:border-slate-700">
+      <div
+        className="sticky z-10 shrink-0 bg-white dark:bg-slate-900 flex items-center gap-0.5 px-1 border-r-2 border-slate-300 dark:border-slate-600 overflow-visible"
+        style={{ left: GRID_LABEL_WIDTH_PX, width: GRID_CONTROLS_WIDTH_PX }}
+      >
         <button
           type="button"
           onClick={() => move(-1)}
@@ -147,7 +151,7 @@ export default function GridRowLine({ row, siblingRows, allRows, sections, cells
             value={row.sectionId}
             onChange={(e) => moveToSection(e.target.value)}
             aria-label={`Move ${row.title} to a different section`}
-            className="text-[10px] px-0.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 max-w-[70px]"
+            className="text-[10px] px-0.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 max-w-[52px]"
           >
             {sections.map((s) => (
               <option key={s.id} value={s.id}>
@@ -159,16 +163,7 @@ export default function GridRowLine({ row, siblingRows, allRows, sections, cells
         <span className="text-[10px] text-slate-400 whitespace-nowrap px-1" title="Current streak / completions in the last 30 days">
           {streak > 0 ? `🔥${streak}` : `${completed}/30`}
         </span>
-        {confirmDelete ? (
-          <span className="flex items-center gap-0.5 text-[10px]">
-            <button type="button" onClick={handleDelete} className="underline font-medium text-red-600 dark:text-red-400">
-              Confirm
-            </button>
-            <button type="button" onClick={() => setConfirmDelete(false)} className="text-slate-400">
-              cancel
-            </button>
-          </span>
-        ) : (
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}
@@ -177,7 +172,18 @@ export default function GridRowLine({ row, siblingRows, allRows, sections, cells
           >
             ✕
           </button>
-        )}
+          {confirmDelete && (
+            <div className="absolute right-0 top-full mt-1 z-40 flex items-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-[10px] shadow-lg">
+              <span className="text-slate-500 dark:text-slate-400">Delete row?</span>
+              <button type="button" onClick={handleDelete} className="underline font-medium text-red-600 dark:text-red-400">
+                Confirm
+              </button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className="text-slate-400">
+                cancel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {dateKeys.map((date) => {

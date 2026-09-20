@@ -5,7 +5,7 @@ import { useLiveQuery } from '../hooks/useLiveQuery'
 import { db } from '../db/db'
 import { useSettings } from '../context/SettingsContext'
 import { addDays, todayKey } from '../lib/date'
-import { GRID_COLUMN_WIDTH_PX, GRID_LABEL_WIDTH_PX, dateRangeBetween, gridColumnWidthClass, nextOrder } from '../lib/grid'
+import { GRID_COLUMN_WIDTH_PX, GRID_PINNED_WIDTH_PX, dateRangeBetween, gridColumnWidthClass, nextOrder } from '../lib/grid'
 import GridSectionBlock from '../components/GridSectionBlock'
 
 const PAGE_DAYS = 30
@@ -30,16 +30,14 @@ export default function Grid() {
   const cells = cellsRaw ?? []
 
   const today = todayKey()
-  const anchor = settings.gridScrollAnchorDate || today
-  const [rangeStart, setRangeStart] = useState(() => addDays(anchor, -PAGE_DAYS))
-  const [rangeEnd, setRangeEnd] = useState(() => addDays(anchor, PAGE_DAYS))
+  const [rangeStart, setRangeStart] = useState(() => addDays(today, -PAGE_DAYS))
+  const [rangeEnd, setRangeEnd] = useState(() => addDays(today, PAGE_DAYS))
   const dateKeys = useMemo(() => dateRangeBetween(rangeStart, rangeEnd), [rangeStart, rangeEnd])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const dateColRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const prevScrollWidthRef = useRef<number | null>(null)
   const hasScrolledInitiallyRef = useRef(false)
-  const scrollDebounceRef = useRef<number | undefined>(undefined)
   const [pendingJump, setPendingJump] = useState<string | null>(null)
   const [newSectionTitle, setNewSectionTitle] = useState('')
   const [addingSection, setAddingSection] = useState(false)
@@ -53,9 +51,9 @@ export default function Grid() {
 
   useEffect(() => {
     if (hasScrolledInitiallyRef.current || loading) return
-    const el = dateColRefs.current[anchor]
+    const el = dateColRefs.current[today]
     if (el) {
-      el.scrollIntoView({ inline: 'start', block: 'nearest' })
+      el.scrollIntoView({ inline: 'center', block: 'nearest' })
       hasScrolledInitiallyRef.current = true
     }
   })
@@ -65,7 +63,6 @@ export default function Grid() {
     const el = dateColRefs.current[pendingJump]
     if (el) {
       el.scrollIntoView({ inline: 'center', block: 'nearest' })
-      void updateSettings({ gridScrollAnchorDate: pendingJump })
       setPendingJump(null)
     }
   })
@@ -80,14 +77,6 @@ export default function Grid() {
     if (el.scrollWidth - el.scrollLeft - el.clientWidth < LOAD_THRESHOLD_PX) {
       setRangeEnd((e) => addDays(e, PAGE_DAYS))
     }
-
-    const colWidthPx = GRID_COLUMN_WIDTH_PX[settings.gridDensity]
-    window.clearTimeout(scrollDebounceRef.current)
-    scrollDebounceRef.current = window.setTimeout(() => {
-      const index = Math.max(0, Math.round(el.scrollLeft / colWidthPx))
-      const date = dateKeys[Math.min(index, dateKeys.length - 1)]
-      if (date && date !== settings.gridScrollAnchorDate) void updateSettings({ gridScrollAnchorDate: date })
-    }, 500)
   }
 
   function jumpToDate(date: string) {
@@ -233,12 +222,16 @@ export default function Grid() {
           )}
         </div>
       ) : (
-        <div ref={scrollRef} onScroll={handleScroll} className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-md">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="overflow-x-auto pb-3 border border-slate-200 dark:border-slate-700 rounded-md"
+        >
           <div style={{ minWidth: 'max-content' }}>
-            <div className="flex sticky top-0 z-20 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
+            <div className="flex sticky top-0 z-20 bg-slate-50 dark:bg-slate-800/80 border-b-2 border-slate-300 dark:border-slate-600">
               <div
                 className="sticky left-0 z-30 shrink-0 bg-slate-50 dark:bg-slate-800/80"
-                style={{ width: GRID_LABEL_WIDTH_PX + 90 }}
+                style={{ width: GRID_PINNED_WIDTH_PX }}
               />
               {dateKeys.map((date) => {
                 const { weekday, day } = formatColumnHeader(date)

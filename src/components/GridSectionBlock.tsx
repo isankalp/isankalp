@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db } from '../db/db'
 import type { GridCell, GridDensity, GridRow, GridSection } from '../db/models'
-import { GRID_LABEL_WIDTH_PX, deleteGridSection, nextOrder } from '../lib/grid'
+import { GRID_PINNED_WIDTH_PX, deleteGridSection, nextOrder } from '../lib/grid'
 import GridRowLine from './GridRowLine'
 
 interface GridSectionBlockProps {
@@ -104,7 +104,8 @@ export default function GridSectionBlock({
               setTitleDraft(section.title)
               setEditing(true)
             }}
-            className="text-xs font-semibold whitespace-nowrap"
+            className="text-xs font-semibold truncate max-w-[220px]"
+            title={section.title}
           >
             {section.title}
           </button>
@@ -194,7 +195,7 @@ export default function GridSectionBlock({
 
       {!section.collapsed &&
         (rowsInSection.length === 0 ? (
-          <p className="sticky left-0 w-fit px-2 py-2 text-[11px] text-slate-400 dark:text-slate-500" style={{ maxWidth: GRID_LABEL_WIDTH_PX * 2 }}>
+          <p className="sticky left-0 w-fit px-2 py-2 text-[11px] text-slate-400 dark:text-slate-500" style={{ maxWidth: GRID_PINNED_WIDTH_PX }}>
             No rows yet — add one above.
           </p>
         ) : (
