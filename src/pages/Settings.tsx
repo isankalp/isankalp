@@ -5,6 +5,7 @@ import ImportCsvModal from '../components/ImportCsvModal'
 import CustomFieldsSettings from '../components/CustomFieldsSettings'
 import AccountSettings from '../components/AccountSettings'
 import AISettings from '../components/AISettings'
+import SpotifyFocusMusicSettings from '../components/SpotifyFocusMusicSettings'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { downloadExport, exportData, importData, wipeAllData } from '../lib/exportImport'
@@ -727,6 +728,8 @@ export default function Settings() {
         </SettingRow>
         {webhookError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{webhookError}</p>}
       </div>
+
+      <SpotifyFocusMusicSettings />
 
       <h2 className="text-lg font-bold mt-6 mb-3">{t('Profiles')}</h2>
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">

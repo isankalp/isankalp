@@ -228,6 +228,11 @@ export interface Settings {
   /** DB-7: Dashboard widget order and visibility, persisted per account/device like every other setting. */
   dashboardWidgetOrder: DashboardWidgetId[]
   dashboardHiddenWidgets: DashboardWidgetId[]
+  /** Epic 62: task category label -> Spotify playlist URI, used to auto-select (never auto-play)
+   *  a Focus Timer session's playlist based on the task being worked on. */
+  focusMusicProfiles: Record<string, string>
+  /** Playlist URI used when a task has no category, or its category has no profile above. */
+  focusMusicDefaultPlaylist: string
 }
 
 export type CapacityMode = 'off' | 'daily' | 'weekly'
@@ -263,6 +268,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoTaggingEnabled: true,
   dashboardWidgetOrder: [...DASHBOARD_WIDGET_IDS],
   dashboardHiddenWidgets: [],
+  focusMusicProfiles: {},
+  focusMusicDefaultPlaylist: '',
 }
 
 /** A single free-text daily journal entry (Epic 57's prerequisite — never built as its own "v5"

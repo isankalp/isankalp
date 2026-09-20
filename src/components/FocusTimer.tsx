@@ -3,6 +3,7 @@ import type { Task } from '../db/models'
 import { AMBIENT_SOUND_OPTIONS, playAmbientSound, stopAmbientSound, type AmbientSoundType } from '../lib/ambientSound'
 import { useSpotifyPlayer } from '../context/SpotifyPlayerContext'
 import { fetchUserPlaylists, type SpotifyPlaylist } from '../lib/spotifyPlayback'
+import { useSettings } from '../context/SettingsContext'
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60)
@@ -28,16 +29,23 @@ export default function FocusTimer({
   const [muted, setMuted] = useState(false)
 
   const spotify = useSpotifyPlayer()
+  const { settings } = useSettings()
   const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([])
   const [selectedPlaylistUri, setSelectedPlaylistUri] = useState('')
   const [spotifyStarting, setSpotifyStarting] = useState(false)
 
+  // Epic 62: pre-select this task's category profile (falling back to the account-wide default),
+  // never auto-playing — the user still has to hit Play, same as choosing any other playlist here.
   useEffect(() => {
     if (!spotify.connected) return
     fetchUserPlaylists().then((result) => {
       if (result.ok && result.data.length > 0) {
         setPlaylists(result.data)
-        setSelectedPlaylistUri((prev) => prev || result.data[0].uri)
+        const categoryLabel = task.category?.label
+        const preferred =
+          (categoryLabel && settings.focusMusicProfiles[categoryLabel]) || settings.focusMusicDefaultPlaylist
+        const preferredIsValid = preferred && result.data.some((p) => p.uri === preferred)
+        setSelectedPlaylistUri((prev) => prev || (preferredIsValid ? preferred : result.data[0].uri))
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once per session, not on every spotify context change
