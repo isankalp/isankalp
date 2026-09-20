@@ -20,6 +20,7 @@ import {
   syncTodayToCalendar,
 } from '../lib/calendarSync'
 import { isValidWebhookUrl } from '../lib/webhook'
+import { connectSpotify, disconnectSpotify, getSpotifyStatus, type SpotifyStatus } from '../lib/spotifyClient'
 import { listProfiles, createProfile, switchActiveProfile, deleteProfile, getActiveProfileId } from '../lib/profiles'
 import { addDays, todayKey } from '../lib/date'
 import { weekStart } from '../lib/aggregate'
@@ -89,6 +90,11 @@ export default function Settings() {
   const [webhookInput, setWebhookInput] = useState(settings.webhookUrl)
   const [webhookError, setWebhookError] = useState<string | null>(null)
 
+  const [spotifyStatus, setSpotifyStatus] = useState<SpotifyStatus | null>(null)
+  const [spotifyLoading, setSpotifyLoading] = useState(false)
+  const [spotifyConnecting, setSpotifyConnecting] = useState(false)
+  const [spotifyError, setSpotifyError] = useState<string | null>(null)
+
   const [profileName, setProfileName] = useState('')
   const [profileError, setProfileError] = useState<string | null>(null)
   const profiles = listProfiles()
@@ -112,6 +118,36 @@ export default function Settings() {
       .catch((err) => setCalendarError(err instanceof Error ? err.message : 'Connection failed.'))
       .finally(() => setCalendarConnecting(false))
   }, [])
+
+  // The spotify-oauth-callback Edge Function redirects back here with ?spotify=connected|error —
+  // consume it once so a later visit to the same URL doesn't keep re-showing the message.
+  useEffect(() => {
+    const spotifyParam = new URLSearchParams(window.location.search).get('spotify')
+    if (!spotifyParam) return
+    if (spotifyParam === 'error') setSpotifyError('Spotify connection failed — try again.')
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setSpotifyStatus(null)
+      return
+    }
+    let cancelled = false
+    setSpotifyLoading(true)
+    getSpotifyStatus()
+      .then((result) => {
+        if (cancelled) return
+        if (result.ok) setSpotifyStatus(result.data)
+        else setSpotifyError(result.error)
+      })
+      .finally(() => {
+        if (!cancelled) setSpotifyLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   async function handleToggleReminders() {
     if (settings.remindersEnabled) {
@@ -197,6 +233,25 @@ export default function Settings() {
     } finally {
       setCalendarConnecting(false)
     }
+  }
+
+  async function handleConnectSpotify() {
+    setSpotifyError(null)
+    setSpotifyConnecting(true)
+    const result = await connectSpotify()
+    // On success this navigates away immediately (full-page redirect to Spotify) — only the
+    // failure path ever reaches here to reset the button.
+    if (!result.ok) {
+      setSpotifyError(result.error)
+      setSpotifyConnecting(false)
+    }
+  }
+
+  async function handleDisconnectSpotify() {
+    setSpotifyError(null)
+    const result = await disconnectSpotify()
+    if (result.ok) setSpotifyStatus({ connected: false })
+    else setSpotifyError(result.error)
   }
 
   function handleDisconnectCalendar() {
@@ -630,6 +685,35 @@ export default function Settings() {
             )}
           </p>
         )}
+
+        <SettingRow
+          label="Spotify"
+          hint={
+            !user
+              ? 'Sign in to connect Spotify.'
+              : spotifyLoading
+                ? 'Checking connection…'
+                : spotifyStatus?.connected
+                  ? `Connected${spotifyStatus.displayName ? ` as ${spotifyStatus.displayName}` : ''}. Play focus music during sessions.`
+                  : 'Connect to play focus music during Focus Timer sessions.'
+          }
+        >
+          <button
+            type="button"
+            onClick={spotifyStatus?.connected ? handleDisconnectSpotify : handleConnectSpotify}
+            disabled={!user || spotifyLoading || spotifyConnecting}
+            className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40"
+          >
+            {spotifyConnecting ? (
+              <span className="inline-block w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+            ) : spotifyStatus?.connected ? (
+              'Disconnect'
+            ) : (
+              'Connect'
+            )}
+          </button>
+        </SettingRow>
+        {spotifyError && <p className="text-xs text-red-600 dark:text-red-400 pb-2">{spotifyError}</p>}
 
         <SettingRow label="Webhook URL" hint="POSTs task title, totalMinutes, and completion time whenever a task reaches 100%.">
           <input
