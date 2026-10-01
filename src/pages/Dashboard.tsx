@@ -8,6 +8,7 @@ import { useSettings } from '../context/SettingsContext'
 import {
   DASHBOARD_WIDGET_IDS,
   dayAggregatePercent,
+  isTaskBlocked,
   isTaskComplete,
   minutesDone as taskMinutesDone,
   totalMinutes as taskTotalMinutes,
@@ -135,12 +136,14 @@ export default function Dashboard() {
   const everHadAnyGoal = useLiveQuery(() => db.goals.count(), []) ?? 0
 
   // DP-1/DP-4/DP-5: unit-agnostic aggregate percent, not the old minutes-weighted dayPercentComplete.
+  // BD-2: Blocked tasks are excluded from every one of these today-stats, same as the day-level totals.
+  const unblockedTasks = tasks.filter((t) => !isTaskBlocked(t))
   const aggregatePercent = dayAggregatePercent(tasks)
-  const completedSubtasksToday = tasks.reduce((s, t) => s + t.completedSubtasks, 0)
-  const totalSubtasksToday = tasks.reduce((s, t) => s + t.totalSubtasks, 0)
-  const remaining = tasks.filter((t) => !isTaskComplete(t)).length
+  const completedSubtasksToday = unblockedTasks.reduce((s, t) => s + t.completedSubtasks, 0)
+  const totalSubtasksToday = unblockedTasks.reduce((s, t) => s + t.totalSubtasks, 0)
+  const remaining = unblockedTasks.filter((t) => !isTaskComplete(t)).length
   const streak = currentStreak(completedDateKeys(days, allTasksForStreak))
-  const pending = tasks.filter((t: Task) => !isTaskComplete(t)).slice(0, 5)
+  const pending = unblockedTasks.filter((t: Task) => !isTaskComplete(t)).slice(0, 5)
 
   // Epic 67 shipped with only goals/habits; this folds in any widget id (like lifestyle) added
   // since, so an existing account's saved order still picks up new widgets instead of hiding them.

@@ -47,6 +47,12 @@ export function isPast(key: string): boolean {
   return key < todayKey()
 }
 
+/** Whole calendar days from `a` to `b` (positive when `b` is later). */
+export function daysBetween(a: string, b: string): number {
+  const msPerDay = 24 * 60 * 60 * 1000
+  return Math.round((parseDateKey(b).getTime() - parseDateKey(a).getTime()) / msPerDay)
+}
+
 export function startOfMonth(key: string): Date {
   const date = parseDateKey(key)
   return new Date(date.getFullYear(), date.getMonth(), 1)

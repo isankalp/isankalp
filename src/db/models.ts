@@ -60,6 +60,19 @@ export interface Task {
   scheduledStart?: string
   /** Block duration shown on the Time-Blocking grid, independent of the task's own subtask math (Epic 44). */
   scheduledDurationMinutes?: number
+  /** Set while this task is in the Blocked state (Epic 79/BK-1). Not editable via the normal
+   *  completedSubtasks input while present; cleared by Unblock or by Accept from the carryover queue. */
+  blockedAt?: number
+  /** Optional free-text note on what it's blocked on (BK-2), set alongside blockedAt. */
+  blockedReason?: string
+  /** True forever once this task has been Blocked at least once, even after it's Accepted back to
+   *  Active — this (not blockedAt) is what drives the carryover queue, so an accepted-but-still-
+   *  incomplete task keeps automatically resurfacing on later days without being re-marked Blocked
+   *  (RA-3). */
+  hasBeenBlocked?: boolean
+  /** Set when permanently Rejected from the carryover queue (RA-4). Once set, this task is excluded
+   *  from every future carryover queue, though its full history remains viewable (RA-6). */
+  blockedRejectedAt?: number
   createdAt: number
   updatedAt: number
 }
@@ -419,12 +432,18 @@ export function isTaskComplete(task: Pick<Task, 'totalSubtasks' | 'completedSubt
   return task.totalSubtasks > 0 && task.completedSubtasks === task.totalSubtasks
 }
 
+/** Epic 79 (BK-1): a task is Blocked exactly while blockedAt is set. */
+export function isTaskBlocked(task: Pick<Task, 'blockedAt'>): boolean {
+  return task.blockedAt !== undefined
+}
+
+/** BD-2: Blocked tasks' minutes are excluded entirely from day-level totals. */
 export function dayMinutesPlanned(tasks: Task[]): number {
-  return tasks.reduce((sum, t) => sum + totalMinutes(t), 0)
+  return tasks.filter((t) => !isTaskBlocked(t)).reduce((sum, t) => sum + totalMinutes(t), 0)
 }
 
 export function dayMinutesDone(tasks: Task[]): number {
-  return tasks.reduce((sum, t) => sum + minutesDone(t), 0)
+  return tasks.filter((t) => !isTaskBlocked(t)).reduce((sum, t) => sum + minutesDone(t), 0)
 }
 
 export function dayPercentComplete(tasks: Task[]): number {
@@ -437,19 +456,24 @@ export type DayCompletionState = 'complete' | 'incomplete' | 'none'
 
 /** Epic 72 (TC-1/TC-2/TC-3/TC-5): binary, not gradient — a day is only ever fully green or fully
  *  red, driven purely by whether every task on it is complete, never by timing (a future day with
- *  an unstarted task is incomplete exactly like a past one). */
+ *  an unstarted task is incomplete exactly like a past one). Epic 80 (BD-3/BD-4): Blocked tasks
+ *  never count toward the "any incomplete = red" rule, and a day left with only Blocked tasks (none
+ *  Active/Completed) renders neutral, identical to a day with zero tasks. */
 export function dayCompletionState(tasks: Task[]): DayCompletionState {
-  if (tasks.length === 0) return 'none'
-  return tasks.every((t) => isTaskComplete(t)) ? 'complete' : 'incomplete'
+  const relevant = tasks.filter((t) => !isTaskBlocked(t))
+  if (relevant.length === 0) return 'none'
+  return relevant.every((t) => isTaskComplete(t)) ? 'complete' : 'incomplete'
 }
 
 /** Epic 73 (DP-1/DP-5): unit-agnostic aggregate percent — sums completedSubtasks/totalSubtasks
  *  across every task on the day regardless of unit, distinct from dayPercentComplete's
- *  minutes-weighted number. null (never "0%") for a day with no tasks. */
+ *  minutes-weighted number. null (never "0%") for a day with no tasks. Epic 80 (BD-2): Blocked
+ *  tasks' totalSubtasks/completedSubtasks are excluded entirely from both sums. */
 export function dayAggregatePercent(tasks: Task[]): number | null {
-  const totalSum = tasks.reduce((s, t) => s + t.totalSubtasks, 0)
+  const relevant = tasks.filter((t) => !isTaskBlocked(t))
+  const totalSum = relevant.reduce((s, t) => s + t.totalSubtasks, 0)
   if (totalSum <= 0) return null
-  const doneSum = tasks.reduce((s, t) => s + t.completedSubtasks, 0)
+  const doneSum = relevant.reduce((s, t) => s + t.completedSubtasks, 0)
   return Math.round((doneSum / totalSum) * 100)
 }
 

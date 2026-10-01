@@ -1,10 +1,12 @@
 import clsx from 'clsx'
 import { useState, type KeyboardEvent } from 'react'
 import { db, logCompletionEvent, updateTaskTracked } from '../db/db'
+import { canMarkBlocked, canUnblockToday } from '../lib/blocked'
 import { pushUndo } from '../lib/undoStack'
 import {
   PRIORITIES,
   clampCompleted,
+  isTaskBlocked,
   isTaskComplete,
   isTaskLocked,
   minutesDone,
@@ -12,6 +14,7 @@ import {
   totalMinutes,
   unitLabel,
   unitOf,
+  type Day,
   type Priority,
   type Task,
 } from '../db/models'
@@ -38,6 +41,7 @@ const CATEGORY_COLORS = ['#6366f1', '#ef4444', '#f59e0b', '#10b981', '#0ea5e9', 
 export default function TaskRow({
   task,
   dayTasks,
+  day,
   onJustCompleted,
   selectable,
   selected,
@@ -45,6 +49,9 @@ export default function TaskRow({
 }: {
   task: Task
   dayTasks: Task[]
+  /** The Day this task currently belongs to — just its date, used to gate the same-day-only Unblock
+   *  quick action (BK-3). */
+  day: Pick<Day, 'date'>
   /** Called once when this task transitions to 100% — parent shows the energy prompt / webhook retry / photo
    *  evidence prompt so they survive this row moving to the Completed section. */
   onJustCompleted?: (task: Task, completionEventId: string | null) => void
@@ -54,6 +61,7 @@ export default function TaskRow({
   onToggleSelect?: () => void
 }) {
   const complete = isTaskComplete(task)
+  const blocked = isTaskBlocked(task)
   const percent = percentComplete(task)
   const done = minutesDone(task)
   const total = totalMinutes(task)
@@ -65,6 +73,9 @@ export default function TaskRow({
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [photoPromptEventId, setPhotoPromptEventId] = useState<string | null>(null)
+  const [blockFormOpen, setBlockFormOpen] = useState(false)
+  const [blockReasonDraft, setBlockReasonDraft] = useState('')
+  const [blockedMenuOpen, setBlockedMenuOpen] = useState(false)
 
   const tasksById = new Map(dayTasks.map((t) => [t.id, t]))
   const locked = isTaskLocked(task, tasksById)
@@ -167,6 +178,20 @@ export default function TaskRow({
     })
   }
 
+  async function confirmMarkBlocked() {
+    await commitField(
+      { blockedAt: Date.now(), blockedReason: blockReasonDraft.trim() || undefined, hasBeenBlocked: true },
+      `Mark "${task.title}" as Blocked`,
+    )
+    setBlockFormOpen(false)
+    setBlockReasonDraft('')
+  }
+
+  async function unblockTask() {
+    await commitField({ blockedAt: undefined, blockedReason: undefined }, `Unblock "${task.title}"`)
+    setBlockedMenuOpen(false)
+  }
+
   const fieldClass =
     'bg-transparent border-b border-dashed border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-solid focus:border-indigo-500 focus:outline-none px-0.5 -mx-0.5'
 
@@ -175,12 +200,15 @@ export default function TaskRow({
       id={`task-${task.id}`}
       data-task-row
       tabIndex={0}
-      aria-label={`${task.title}, ${percent} percent complete, ${task.completedSubtasks} of ${task.totalSubtasks} subtasks${complete ? ', complete' : ''}${locked ? ', locked' : ''}`}
+      aria-label={`${task.title}, ${percent} percent complete, ${task.completedSubtasks} of ${task.totalSubtasks} subtasks${complete ? ', complete' : ''}${locked ? ', locked' : ''}${blocked ? ', blocked' : ''}`}
       className={clsx(
-        'p-3 rounded-lg border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 transition-opacity',
+        'p-3 rounded-lg border transition-opacity',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+        blocked
+          ? 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-600'
+          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700',
         complete && 'opacity-60',
-        locked && 'opacity-70',
+        locked && !blocked && 'opacity-70',
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -199,6 +227,38 @@ export default function TaskRow({
               <span title={`Locked until "${dependency?.title}" is complete`} aria-label="Task locked" className="text-xs">
                 🔒
               </span>
+            )}
+            {blocked && (
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setBlockedMenuOpen((v) => !v)}
+                  title={task.blockedReason ? `Blocked on: ${task.blockedReason}` : undefined}
+                  aria-label={task.blockedReason ? `Blocked, on: ${task.blockedReason}` : 'Blocked'}
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                >
+                  🚫 Blocked
+                </button>
+                {blockedMenuOpen && (
+                  <div className="absolute left-0 top-full mt-1 z-20 flex flex-col items-start gap-0.5 whitespace-nowrap rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-[11px] shadow-lg">
+                    {canUnblockToday(task, day) && (
+                      <button type="button" onClick={unblockTask} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+                        Unblock
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailsOpen(true)
+                        setBlockedMenuOpen(false)
+                      }}
+                      className="text-slate-500 dark:text-slate-400 hover:underline"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             {task.category && (
               <span
@@ -305,11 +365,48 @@ export default function TaskRow({
           >
             ⓘ
           </button>
+          {canMarkBlocked(task) && (
+            <button
+              type="button"
+              onClick={() => setBlockFormOpen((v) => !v)}
+              aria-label="Mark as Blocked"
+              className="text-xs text-slate-300 dark:text-slate-600 hover:text-slate-500"
+            >
+              🚫
+            </button>
+          )}
           <button type="button" onClick={deleteTask} aria-label={`Delete ${task.title}`} className="text-slate-400 hover:text-red-600 text-xs">
             ✕
           </button>
         </div>
       </div>
+
+      {blockFormOpen && (
+        <div className="mt-2 p-2 rounded-md border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 flex items-center gap-1.5 flex-wrap">
+          <input
+            type="text"
+            value={blockReasonDraft}
+            onChange={(e) => setBlockReasonDraft(e.target.value)}
+            placeholder="Blocked on (optional)"
+            maxLength={200}
+            aria-label="Blocked on"
+            className="flex-1 min-w-32 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs"
+          />
+          <button type="button" onClick={confirmMarkBlocked} className="text-[11px] px-2 py-0.5 rounded-md bg-indigo-600 text-white font-medium">
+            Mark as Blocked
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setBlockFormOpen(false)
+              setBlockReasonDraft('')
+            }}
+            className="text-[11px] px-2 py-0.5 rounded-md border border-slate-300 dark:border-slate-600"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {detailsOpen && (
         <div className="space-y-2">
@@ -402,7 +499,7 @@ export default function TaskRow({
           <button
             type="button"
             onClick={() => commitCompleted(task.completedSubtasks - 1)}
-            disabled={task.completedSubtasks <= 0 || locked}
+            disabled={task.completedSubtasks <= 0 || locked || blocked}
             className="w-6 h-6 rounded-md border border-slate-200 dark:border-slate-600 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm"
             aria-label="Decrement completed subtasks"
           >
@@ -413,7 +510,7 @@ export default function TaskRow({
             value={task.completedSubtasks}
             min={0}
             max={task.totalSubtasks}
-            disabled={locked}
+            disabled={locked || blocked}
             onChange={(e) => commitCompleted(Number(e.target.value))}
             onBlur={(e) => commitCompleted(Number(e.target.value))}
             className="w-14 text-center px-1.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs tabular-nums disabled:opacity-50"
@@ -422,7 +519,7 @@ export default function TaskRow({
           <button
             type="button"
             onClick={() => commitCompleted(task.completedSubtasks + 1)}
-            disabled={task.completedSubtasks >= task.totalSubtasks || locked}
+            disabled={task.completedSubtasks >= task.totalSubtasks || locked || blocked}
             className="w-6 h-6 rounded-md border border-slate-200 dark:border-slate-600 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm"
             aria-label="Increment completed subtasks"
           >
@@ -433,7 +530,7 @@ export default function TaskRow({
             <button
               type="button"
               onClick={() => setFocusOpen(true)}
-              disabled={complete || locked}
+              disabled={complete || locked || blocked}
               className="ml-auto text-[11px] px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
             >
               ▶ Start Focus

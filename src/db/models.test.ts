@@ -10,6 +10,7 @@ import {
   groupTasksByUnit,
   isCustomUnitValid,
   isSubtaskItemsValid,
+  isTaskBlocked,
   isTaskComplete,
   isTaskLocked,
   minutesDone,
@@ -135,6 +136,22 @@ describe('day rollups', () => {
   it('is 0% for a day with no tasks', () => {
     expect(dayPercentComplete([])).toBe(0)
   })
+
+  it('excludes Blocked tasks from both sums (BD-2)', () => {
+    const tasks = [
+      makeTask({ id: 't1', minutesPerSubtask: 5, totalSubtasks: 5, completedSubtasks: 2 }),
+      makeTask({ id: 't2', minutesPerSubtask: 100, totalSubtasks: 10, completedSubtasks: 3, blockedAt: 1 }),
+    ]
+    expect(dayMinutesPlanned(tasks)).toBe(25)
+    expect(dayMinutesDone(tasks)).toBe(10)
+  })
+})
+
+describe('isTaskBlocked', () => {
+  it('is true exactly while blockedAt is set', () => {
+    expect(isTaskBlocked(makeTask())).toBe(false)
+    expect(isTaskBlocked(makeTask({ blockedAt: Date.now() }))).toBe(true)
+  })
 })
 
 describe('dayCompletionState (Epic 72: binary, never gradient)', () => {
@@ -157,6 +174,22 @@ describe('dayCompletionState (Epic 72: binary, never gradient)', () => {
     ]
     expect(dayCompletionState(tasks)).toBe('incomplete')
   })
+
+  it('renders complete when the only incomplete task is Blocked (BD-3)', () => {
+    const tasks = [
+      makeTask({ id: 't1', totalSubtasks: 5, completedSubtasks: 5 }),
+      makeTask({ id: 't2', totalSubtasks: 3, completedSubtasks: 0, blockedAt: 1 }),
+    ]
+    expect(dayCompletionState(tasks)).toBe('complete')
+  })
+
+  it('renders none when every task is Blocked (BD-4)', () => {
+    const tasks = [
+      makeTask({ id: 't1', totalSubtasks: 5, completedSubtasks: 2, blockedAt: 1 }),
+      makeTask({ id: 't2', totalSubtasks: 3, completedSubtasks: 0, blockedAt: 1 }),
+    ]
+    expect(dayCompletionState(tasks)).toBe('none')
+  })
 })
 
 describe('dayAggregatePercent (Epic 73: unit-agnostic, subtask-count based)', () => {
@@ -171,6 +204,19 @@ describe('dayAggregatePercent (Epic 73: unit-agnostic, subtask-count based)', ()
     ]
     // (5 + 10) / (10 + 10) = 75%, independent of minutesPerSubtask weighting
     expect(dayAggregatePercent(tasks)).toBe(75)
+  })
+
+  it('excludes Blocked tasks from both sums (BD-2)', () => {
+    const tasks = [
+      makeTask({ id: 't1', totalSubtasks: 10, completedSubtasks: 5 }),
+      makeTask({ id: 't2', totalSubtasks: 100, completedSubtasks: 1, blockedAt: 1 }),
+    ]
+    expect(dayAggregatePercent(tasks)).toBe(50)
+  })
+
+  it('is null when every task is Blocked', () => {
+    const tasks = [makeTask({ id: 't1', totalSubtasks: 10, completedSubtasks: 5, blockedAt: 1 })]
+    expect(dayAggregatePercent(tasks)).toBeNull()
   })
 })
 

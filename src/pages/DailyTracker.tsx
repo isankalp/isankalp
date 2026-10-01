@@ -17,11 +17,13 @@ import { db } from '../db/db'
 import {
   PRIORITIES,
   dayUnitTotals,
+  isTaskBlocked,
   isTaskComplete,
   sortByPriority,
   type Priority,
   type Task,
 } from '../db/models'
+import BlockedItemsPanel from '../components/BlockedItemsPanel'
 import { useSettings } from '../context/SettingsContext'
 import { useAiClient } from '../hooks/useAiClient'
 import { addDays, todayKey } from '../lib/date'
@@ -75,14 +77,17 @@ export default function DailyTracker() {
   const allTasks = tasks ?? []
   const visibleTasks = priorityFilter === 'all' ? allTasks : allTasks.filter((t) => t.priority === priorityFilter)
 
-  let activeTasks = visibleTasks.filter((t) => !isTaskComplete(t))
+  let activeTasks = visibleTasks.filter((t) => !isTaskComplete(t) && !isTaskBlocked(t))
   let completedTasks = visibleTasks.filter((t) => isTaskComplete(t))
+  let blockedTasks = visibleTasks.filter((t) => isTaskBlocked(t))
   if (sortPriority) {
     activeTasks = sortByPriority(activeTasks)
     completedTasks = sortByPriority(completedTasks)
+    blockedTasks = sortByPriority(blockedTasks)
   } else {
     activeTasks = [...activeTasks].sort((a, b) => a.createdAt - b.createdAt)
     completedTasks = [...completedTasks].sort((a, b) => b.updatedAt - a.updatedAt)
+    blockedTasks = [...blockedTasks].sort((a, b) => (b.blockedAt ?? 0) - (a.blockedAt ?? 0))
   }
 
   const unitTotals = dayUnitTotals(allTasks)
@@ -139,11 +144,13 @@ export default function DailyTracker() {
   }, [focusTaskId, tasks])
 
   function renderTask(task: Task) {
+    if (!day) return null
     return (
       <TaskRow
         key={task.id}
         task={task}
         dayTasks={allTasks}
+        day={day}
         onJustCompleted={handleJustCompleted}
         selectable={selectionMode}
         selected={selectedIds.has(task.id)}
@@ -217,6 +224,8 @@ export default function DailyTracker() {
           </div>
         </div>
       )}
+
+      {isTodayView && <BlockedItemsPanel />}
 
       {isTodayView && <RolloverPrompt date={activeDate} />}
 
@@ -358,6 +367,14 @@ export default function DailyTracker() {
           {moveCompleted ? (
             <>
               <ul className="space-y-2">{activeTasks.map(renderTask)}</ul>
+              {blockedTasks.length > 0 && (
+                <details open className="group">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                    Blocked ({blockedTasks.length})
+                  </summary>
+                  <ul className="space-y-2">{blockedTasks.map(renderTask)}</ul>
+                </details>
+              )}
               {completedTasks.length > 0 && (
                 <details open className="group">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
@@ -370,8 +387,8 @@ export default function DailyTracker() {
           ) : (
             <ul className="space-y-2">
               {(sortPriority
-                ? sortByPriority([...activeTasks, ...completedTasks])
-                : [...activeTasks, ...completedTasks].sort((a, b) => a.createdAt - b.createdAt)
+                ? sortByPriority([...activeTasks, ...blockedTasks, ...completedTasks])
+                : [...activeTasks, ...blockedTasks, ...completedTasks].sort((a, b) => a.createdAt - b.createdAt)
               ).map(renderTask)}
             </ul>
           )}

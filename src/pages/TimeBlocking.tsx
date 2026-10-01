@@ -15,7 +15,7 @@ import {
   timeToGridMinutes,
   type TimeBlock,
 } from '../lib/timeBlocking'
-import { unitLabel, type Task } from '../db/models'
+import { unitLabel, type Day, type Task } from '../db/models'
 import { todayKey } from '../lib/date'
 
 const PX_PER_MINUTE = 1.5
@@ -217,7 +217,7 @@ export default function TimeBlocking() {
           ) : (
             <ul className="space-y-2">
               {unscheduled.map((task) => (
-                <UnscheduledItem key={task.id} task={task} dayTasks={allTasks} />
+                <UnscheduledItem key={task.id} task={task} dayTasks={allTasks} day={day ?? { date: activeDate }} />
               ))}
             </ul>
           )}
@@ -227,10 +227,10 @@ export default function TimeBlocking() {
   )
 }
 
-function UnscheduledItem({ task, dayTasks }: { task: Task; dayTasks: Task[] }) {
+function UnscheduledItem({ task, dayTasks, day }: { task: Task; dayTasks: Task[]; day: Pick<Day, 'date'> }) {
   return (
     <div draggable onDragStart={(e) => e.dataTransfer.setData('text/plain', task.id)} className="cursor-move" title={`Drag onto the grid to schedule (${unitLabel(task)})`}>
-      <TaskRow task={task} dayTasks={dayTasks} />
+      <TaskRow task={task} dayTasks={dayTasks} day={day} />
     </div>
   )
 }
