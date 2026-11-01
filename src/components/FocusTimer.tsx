@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Task } from '../db/models'
+import type { Day, Task } from '../db/models'
 import { AMBIENT_SOUND_OPTIONS, playAmbientSound, stopAmbientSound, type AmbientSoundType } from '../lib/ambientSound'
 import { useSpotifyPlayer } from '../context/SpotifyPlayerContext'
 import { fetchUserPlaylists, type SpotifyPlaylist } from '../lib/spotifyPlayback'
 import { useSettings } from '../context/SettingsContext'
+import { deadlineTimestamp, formatCountdown, remainingMs } from '../lib/deadline'
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60)
@@ -13,10 +14,13 @@ function formatTime(totalSeconds: number): string {
 
 export default function FocusTimer({
   task,
+  day,
   onClose,
   onComplete,
 }: {
   task: Task
+  /** DI-6: when the owning day has a deadline set, its live remaining time is also shown here. */
+  day?: Pick<Day, 'date' | 'deadlineTime'>
   onClose: () => void
   onComplete: (actualMinutes: number, spotifyTrackCount?: number) => void
 }) {
@@ -27,6 +31,15 @@ export default function FocusTimer({
   const startedAt = useRef(0)
   const [ambientSound, setAmbientSound] = useState<AmbientSoundType>('none')
   const [muted, setMuted] = useState(false)
+
+  const [deadlineNow, setDeadlineNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!day?.deadlineTime) return
+    const id = setInterval(() => setDeadlineNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [day?.deadlineTime])
+  const deadlineRemainingMs =
+    day?.deadlineTime !== undefined ? remainingMs(deadlineTimestamp(day.date, day.deadlineTime), deadlineNow) : null
 
   const spotify = useSpotifyPlayer()
   const { settings } = useSettings()
@@ -132,6 +145,11 @@ export default function FocusTimer({
   return (
     <div className="mt-2 p-3 rounded-md border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-500/10 text-center">
       <p className="text-2xl font-bold tabular-nums text-indigo-700 dark:text-indigo-300">{formatTime(remaining)}</p>
+      {deadlineRemainingMs !== null && (
+        <p className="text-[11px] text-indigo-500 dark:text-indigo-400 mt-0.5">
+          ⏱ Day deadline: {formatCountdown(deadlineRemainingMs)} left
+        </p>
+      )}
       <div className="flex items-center justify-center gap-2 mt-2">
         <button
           type="button"

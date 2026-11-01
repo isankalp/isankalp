@@ -1,5 +1,6 @@
 import { db } from '../db/db'
-import type { Settings } from '../db/models'
+import type { Day, Settings, Task } from '../db/models'
+import { deadlineTimestamp, tasksRemainingCount } from './deadline'
 import { todayKey } from './date'
 
 export function notificationSupported(): boolean {
@@ -34,6 +35,25 @@ function nowMinutes(): number {
 }
 
 /** Call periodically (e.g. every 60s) while the app is open. No-ops unless reminders are enabled and permission is granted. */
+/** DI-2/DI-3: a lead-time nudge before today's deadline, firing once, only while a deadline is
+ *  actually set (an absent deadlineTime means this never fires, independent of remindersEnabled)
+ *  and only while non-blocked tasks are still incomplete. */
+function checkDeadlineReminder(day: Day | undefined, tasks: Task[], settings: Settings): void {
+  if (!day?.deadlineTime) return
+  const deadlineAt = deadlineTimestamp(day.date, day.deadlineTime)
+  const leadMs = settings.deadlineReminderLeadMinutes * 60 * 1000
+  const now = Date.now()
+  if (now < deadlineAt - leadMs || now >= deadlineAt) return
+  const remaining = tasksRemainingCount(tasks)
+  if (remaining === 0) return
+  const key = 'reminder:deadline'
+  if (alreadyFiredToday(key)) return
+  new Notification('Deadline approaching', {
+    body: `Due at ${day.deadlineTime} — ${remaining} task${remaining === 1 ? '' : 's'} remaining.`,
+  })
+  markFiredToday(key)
+}
+
 export async function checkReminders(settings: Settings): Promise<void> {
   if (!settings.remindersEnabled || notificationPermission() !== 'granted') return
 
@@ -41,6 +61,8 @@ export async function checkReminders(settings: Settings): Promise<void> {
   const nowMin = nowMinutes()
   const day = await db.days.where('date').equals(today).first()
   const tasks = day ? await db.tasks.where('dayId').equals(day.id).toArray() : []
+
+  checkDeadlineReminder(day, tasks, settings)
 
   if (tasks.length === 0) {
     if (nowMin >= parseThreshold(settings.eveningNudgeTime) && !alreadyFiredToday('reminder:empty-day')) {

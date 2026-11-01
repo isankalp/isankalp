@@ -91,6 +91,14 @@ export interface CustomFieldDef {
 export interface Day {
   id: string
   date: string // YYYY-MM-DD
+  /** "HH:MM" 24h local time this day's tasks are due by (Epic 83/DL-1). Absent = no deadline at
+   *  all, and DL-2 requires that absence to mean zero timer/deadline UI anywhere for this day. */
+  deadlineTime?: string
+  /** Frozen the first time the deadline is observed to have passed (either live, DE-3, or lazily on
+   *  a later load, DE-5) by evaluating every non-blocked task's completion at that moment — 'met' if
+   *  all were at 100%, otherwise 'missed'. Never recomputed after being set, so a task completed
+   *  after the deadline can never flip a recorded 'missed' back to 'met' (DE-5). */
+  deadlineOutcome?: 'met' | 'missed'
 }
 
 export interface Goal {
@@ -264,6 +272,9 @@ export interface Settings {
   gridSectionFilter: string
   /** The date column the grid was scrolled to when last left, so reopening restores position. */
   gridScrollAnchorDate: string
+  /** DI-2: minutes before a day's deadline that the reminder notification fires, when reminders are
+   *  enabled and that day has a deadline set. Never fires at all otherwise (DI-3). */
+  deadlineReminderLeadMinutes: number
 }
 
 export type GridDensity = 'compact' | 'comfortable'
@@ -307,6 +318,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gridDensity: 'comfortable',
   gridSectionFilter: '',
   gridScrollAnchorDate: '',
+  deadlineReminderLeadMinutes: 60,
 }
 
 /** A single free-text daily journal entry (Epic 57's prerequisite — never built as its own "v5"

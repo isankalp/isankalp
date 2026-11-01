@@ -49,9 +49,9 @@ export default function TaskRow({
 }: {
   task: Task
   dayTasks: Task[]
-  /** The Day this task currently belongs to — just its date, used to gate the same-day-only Unblock
-   *  quick action (BK-3). */
-  day: Pick<Day, 'date'>
+  /** The Day this task currently belongs to — used to gate the same-day-only Unblock quick action
+   *  (BK-3), and (DI-6) to show the day's deadline countdown inside the Focus Timer overlay. */
+  day: Pick<Day, 'date' | 'deadlineTime'>
   /** Called once when this task transitions to 100% — parent shows the energy prompt / webhook retry / photo
    *  evidence prompt so they survive this row moving to the Completed section. */
   onJustCompleted?: (task: Task, completionEventId: string | null) => void
@@ -542,6 +542,7 @@ export default function TaskRow({
       {focusOpen && (
         <FocusTimer
           task={task}
+          day={day}
           onClose={() => setFocusOpen(false)}
           onComplete={(actualMinutes, spotifyTrackCount) => commitCompleted(task.completedSubtasks + 1, actualMinutes, spotifyTrackCount)}
         />

@@ -13,6 +13,7 @@ import { useSettings } from './context/SettingsContext'
 import { ensureRecurringTasksGenerated } from './lib/recurrence'
 import { checkAndAwardBadges } from './lib/badges'
 import { checkReminders } from './lib/reminders'
+import { ensurePastDeadlineOutcomesFrozen } from './lib/deadline'
 import { hasOnboarded } from './lib/onboarding'
 import { checkAutoBackup } from './lib/autoBackup'
 import { flushWebhookQueue } from './lib/webhookQueue'
@@ -64,6 +65,15 @@ export default function App() {
     const id = setInterval(run, 60_000)
     return () => clearInterval(id)
   }, [settings])
+
+  // DE-4/DE-5/DE-7: freezes any past day's deadline outcome the first time it's observed after
+  // that day ended, so "Deadline Missed" never flips back to "Met" from a later completion, and a
+  // new day starts with no frozen outcome of its own until it, too, ends.
+  useEffect(() => {
+    ensurePastDeadlineOutcomesFrozen()
+    const id = setInterval(ensurePastDeadlineOutcomesFrozen, 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     checkAutoBackup(settings)

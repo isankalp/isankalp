@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from '../hooks/useLiveQuery'
 import { db } from '../db/db'
+import ChartErrorBoundary from '../components/ChartErrorBoundary'
+import DashboardCountdownWidget from '../components/DashboardCountdownWidget'
 import HabitWidget from '../components/HabitWidget'
 import LifestyleModal from '../components/LifestyleModal'
 import { useSettings } from '../context/SettingsContext'
@@ -228,6 +230,10 @@ export default function Dashboard() {
           <p className="text-[11px] text-slate-500 dark:text-slate-400">Tasks remaining</p>
         </div>
       </div>
+
+      <ChartErrorBoundary label="the deadline countdown">
+        <DashboardCountdownWidget day={day} tasks={tasks} />
+      </ChartErrorBoundary>
 
       <button
         type="button"

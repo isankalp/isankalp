@@ -45,6 +45,13 @@ export default function Stats() {
 
   const breakdown = breakdownByTitle(tasks, days, addDays(todayKey(), -6)).slice(0, 8)
 
+  // DE-6: past days' deadline time + recorded Met/Missed outcome, viewable here. "Pending" covers
+  // today/future days whose outcome hasn't been frozen yet (DE-4/DE-5 only freeze past days).
+  const deadlineHistory = days
+    .filter((d) => d.deadlineTime)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 14)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -131,6 +138,34 @@ export default function Stats() {
               <li key={b.title} className="flex items-center justify-between text-xs">
                 <span>{b.title}</span>
                 <span className="font-medium tabular-nums">{b.minutes} min</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+        <h3 className="font-semibold text-sm mb-2">Deadline history</h3>
+        {deadlineHistory.length === 0 ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400">No deadlines set yet.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {deadlineHistory.map((d) => (
+              <li key={d.id} className="flex items-center justify-between text-xs">
+                <Link to={`/day/${d.date}`} className="hover:underline">
+                  {d.date} · due {d.deadlineTime}
+                </Link>
+                <span
+                  className={
+                    d.deadlineOutcome === 'met'
+                      ? 'font-medium text-emerald-600 dark:text-emerald-400'
+                      : d.deadlineOutcome === 'missed'
+                        ? 'font-medium text-red-700 dark:text-red-400'
+                        : 'text-slate-400'
+                  }
+                >
+                  {d.deadlineOutcome === 'met' ? '✅ Met' : d.deadlineOutcome === 'missed' ? '❌ Missed' : 'Pending'}
+                </span>
               </li>
             ))}
           </ul>

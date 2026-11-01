@@ -24,6 +24,8 @@ import {
   type Task,
 } from '../db/models'
 import BlockedItemsPanel from '../components/BlockedItemsPanel'
+import ChartErrorBoundary from '../components/ChartErrorBoundary'
+import DeadlineBar from '../components/DeadlineBar'
 import { useSettings } from '../context/SettingsContext'
 import { useAiClient } from '../hooks/useAiClient'
 import { addDays, todayKey } from '../lib/date'
@@ -223,6 +225,12 @@ export default function DailyTracker() {
             </button>
           </div>
         </div>
+      )}
+
+      {activeDate >= todayKey() && (
+        <ChartErrorBoundary label="the deadline timer">
+          <DeadlineBar date={activeDate} day={day} tasks={allTasks} />
+        </ChartErrorBoundary>
       )}
 
       {isTodayView && <BlockedItemsPanel />}
