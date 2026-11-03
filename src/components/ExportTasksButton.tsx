@@ -4,11 +4,12 @@ import { db } from '../db/db'
 import { buildTaskExport, downloadTaskExportCsv } from '../lib/taskExport'
 import { useToast } from '../context/ToastContext'
 
-/** Epic 87: a one-tap export of every task ever added, visible in the Tasks screen header on every
- *  day. EX-4: disabled with a tooltip when the account has zero tasks. EX-5: a second tap while
- *  exporting is ignored — the button shows a spinner and is disabled for the duration. EX-6/EX-7:
- *  success shows a row-count toast and downloads the file; failure shows an error toast and
- *  downloads nothing, leaving the button active again. EX-8: read-only, no stored data changes. */
+/** Epic 87/90: a one-tap export of every task ever added, expanded to one row per named subtask
+ *  (Epic 90), visible in the Tasks screen header on every day. EX-4: disabled with a tooltip when
+ *  the account has zero tasks. EX-5: a second tap while exporting is ignored — the button shows a
+ *  spinner and is disabled for the duration. EX-6/EX-7/SC-1: success shows a task-and-row-count
+ *  toast and downloads the file; failure shows an error toast and downloads nothing, leaving the
+ *  button active again. EX-8/SC-7: read-only, no stored data changes. */
 export default function ExportTasksButton() {
   const taskCount = useLiveQuery(() => db.tasks.count(), []) ?? 0
   const [exporting, setExporting] = useState(false)
@@ -27,7 +28,10 @@ export default function ExportTasksButton() {
     try {
       const result = await buildTaskExport()
       downloadTaskExportCsv(result)
-      showToast(`Exported ${result.rowCount} task${result.rowCount === 1 ? '' : 's'}`, 'success')
+      showToast(
+        `Exported ${result.taskCount} task${result.taskCount === 1 ? '' : 's'} (${result.rowCount} row${result.rowCount === 1 ? '' : 's'})`,
+        'success',
+      )
     } catch {
       showToast('Export failed — try again', 'error')
     } finally {
@@ -41,7 +45,7 @@ export default function ExportTasksButton() {
       type="button"
       onClick={handleExport}
       disabled={disabled}
-      title={!hasTasks ? 'No tasks to export' : undefined}
+      title={!hasTasks ? 'No tasks to export' : 'Exports one row per subtask'}
       aria-label="Export Tasks"
       className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
     >
