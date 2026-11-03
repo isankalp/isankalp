@@ -43,7 +43,9 @@ export default function KeyboardShortcuts() {
 
       if (e.key.toLowerCase() === 'n') {
         e.preventDefault()
-        ;(document.querySelector('[aria-label="Quick add task"]') as HTMLElement | null)?.focus()
+        const el = document.querySelector('[aria-label="Quick add task"]') as HTMLElement | null
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el?.focus()
         return
       }
 

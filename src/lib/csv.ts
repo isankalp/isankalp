@@ -44,3 +44,16 @@ export function parseCsv(text: string): string[][] {
 
   return rows.filter((r) => !(r.length === 1 && r[0].trim() === ''))
 }
+
+/** Counterpart writer: quotes a field only when it contains a comma, quote, or line break (EF-8),
+ *  doubling any internal quotes — the inverse of parseCsv's quoted-field handling above. */
+export function escapeCsvField(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`
+  }
+  return value
+}
+
+export function toCsvRow(fields: string[]): string {
+  return fields.map(escapeCsvField).join(',')
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { forwardRef, useImperativeHandle, useState } from 'react'
 import { v4 as uuid } from 'uuid'
 import { db, getOrCreateDay } from '../db/db'
 import { useAiClient } from '../hooks/useAiClient'
@@ -21,7 +21,26 @@ export interface QuickAddPrefill {
   totalSubtasks?: number
 }
 
-export default function QuickAddBar({ date, onManualFallback }: { date: string; onManualFallback: (prefill: QuickAddPrefill) => void }) {
+export interface QuickAddBarHandle {
+  /** LR-11: used by the day-navigation guard's "Save" action. Only succeeds when the current text
+   *  has already parsed into a confirmable task — unparseable draft text has nothing valid to save,
+   *  so it returns false and the caller treats that text as discarded. */
+  trySave: () => Promise<boolean>
+}
+
+interface Props {
+  date: string
+  onManualFallback: (prefill: QuickAddPrefill) => void
+  /** LR-11: fires whenever the draft text starts/stops being non-empty. */
+  onDirtyChange?: (dirty: boolean) => void
+  /** LR-6: fires once a task is actually created, so the parent can show a confirmation toast. */
+  onCreated?: () => void
+}
+
+const QuickAddBar = forwardRef<QuickAddBarHandle, Props>(function QuickAddBar(
+  { date, onManualFallback, onDirtyChange, onCreated },
+  ref,
+) {
   const { configured: aiConfigured, structured } = useAiClient()
   const [text, setText] = useState('')
   const [parsed, setParsed] = useState<ParsedQuickAdd | null>(null)
@@ -37,6 +56,7 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
     setVoiceError(null)
     setAiError(null)
     setAiParsed(false)
+    onDirtyChange?.(!!value.trim())
     if (!value.trim()) {
       setParsed(null)
       setParseFailed(false)
@@ -112,7 +132,17 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
     setParsed(null)
     setAiParsed(false)
     setParseFailed(false)
+    onDirtyChange?.(false)
+    onCreated?.()
   }
+
+  useImperativeHandle(ref, () => ({
+    trySave: async () => {
+      if (!parsed) return false
+      await confirmCreate()
+      return true
+    },
+  }))
 
   function useManualFallback() {
     const result = parseQuickAdd(text)
@@ -121,6 +151,7 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
     setParsed(null)
     setAiParsed(false)
     setParseFailed(false)
+    onDirtyChange?.(false)
   }
 
   return (
@@ -189,4 +220,6 @@ export default function QuickAddBar({ date, onManualFallback }: { date: string; 
       {voiceError && <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{voiceError}</p>}
     </div>
   )
-}
+})
+
+export default QuickAddBar

@@ -1,15 +1,16 @@
 import { useLiveQuery } from '../hooks/useLiveQuery'
-import { useEffect, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AddTaskForm, { type AddTaskPrefill } from '../components/AddTaskForm'
 import BulkActionToolbar from '../components/BulkActionToolbar'
 import CommandBar from '../components/CommandBar'
 import CompletionFollowUp from '../components/CompletionFollowUp'
 import DayNav from '../components/DayNav'
+import ExportTasksButton from '../components/ExportTasksButton'
 import HabitWidget from '../components/HabitWidget'
 import ImportCsvModal from '../components/ImportCsvModal'
-import JournalEntryBox from '../components/JournalEntryBox'
-import QuickAddBar from '../components/QuickAddBar'
+import JournalEntryBox, { type JournalEntryBoxHandle } from '../components/JournalEntryBox'
+import QuickAddBar, { type QuickAddBarHandle } from '../components/QuickAddBar'
 import RolloverPrompt from '../components/RolloverPrompt'
 import TaskRow from '../components/TaskRow'
 import TemplatesPanel from '../components/TemplatesPanel'
@@ -27,6 +28,7 @@ import BlockedItemsPanel from '../components/BlockedItemsPanel'
 import ChartErrorBoundary from '../components/ChartErrorBoundary'
 import DeadlineBar from '../components/DeadlineBar'
 import { useSettings } from '../context/SettingsContext'
+import { useToast } from '../context/ToastContext'
 import { useAiClient } from '../hooks/useAiClient'
 import { addDays, todayKey } from '../lib/date'
 import { weekStart } from '../lib/aggregate'
@@ -36,12 +38,19 @@ import { capacityPercent, isCapacityEnabled, minutesUnitPlanned } from '../lib/c
 export default function DailyTracker() {
   const { date } = useParams<{ date: string }>()
   const activeDate = date ?? todayKey()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const focusAdd = searchParams.get('focus') === 'add'
   const focusTaskId = searchParams.get('task')
   const { settings } = useSettings()
+  const { showToast } = useToast()
   const { configured: aiConfigured } = useAiClient()
   const [commandBarOpen, setCommandBarOpen] = useState(false)
+  const journalRef = useRef<JournalEntryBoxHandle>(null)
+  const quickAddRef = useRef<QuickAddBarHandle>(null)
+  const [journalDirty, setJournalDirty] = useState(false)
+  const [quickAddDirty, setQuickAddDirty] = useState(false)
+  const [pendingNavDate, setPendingNavDate] = useState<string | null>(null)
   const [sortPriority, setSortPriority] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
   const [templatesOpen, setTemplatesOpen] = useState(false)
@@ -68,6 +77,36 @@ export default function DailyTracker() {
   function exitSelectionMode() {
     setSelectionMode(false)
     setSelectedIds(new Set())
+  }
+
+  // LR-11: Journal/Quick-Add's own onDirtyChange calls land here, so the day-nav guard below
+  // always reads the live dirty state at the moment of an attempted navigation.
+  function handleDayNavigate(targetDate: string) {
+    if (journalDirty || quickAddDirty) {
+      setPendingNavDate(targetDate)
+    } else {
+      navigate(`/day/${targetDate}`)
+    }
+  }
+
+  async function handleConfirmSave() {
+    if (!pendingNavDate) return
+    if (journalDirty) await journalRef.current?.flush()
+    if (quickAddDirty) await quickAddRef.current?.trySave()
+    setJournalDirty(false)
+    setQuickAddDirty(false)
+    const target = pendingNavDate
+    setPendingNavDate(null)
+    navigate(`/day/${target}`)
+  }
+
+  function handleDiscardNav() {
+    if (!pendingNavDate) return
+    setJournalDirty(false)
+    setQuickAddDirty(false)
+    const target = pendingNavDate
+    setPendingNavDate(null)
+    navigate(`/day/${target}`)
   }
 
   const day = useLiveQuery(() => db.days.where('date').equals(activeDate).first(), [activeDate])
@@ -115,10 +154,14 @@ export default function DailyTracker() {
 
   const selectedTasks = allTasks.filter((t) => selectedIds.has(t.id))
 
-  // DB-4: Dashboard's "+ Add Task" links here with ?focus=add — consume it once so a later
+  // DB-4/LR-7: Dashboard's "+ Add Task" links here with ?focus=add — scrolls to and focuses the
+  // bottom Quick-Add bar (not the manual AddTaskForm), then consumes the param once so a later
   // visit to the same URL (e.g. browser back) doesn't keep re-stealing focus.
   useEffect(() => {
     if (!focusAdd) return
+    const el = document.querySelector('[aria-label="Quick add task"]') as HTMLElement | null
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el?.focus()
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       next.delete('focus')
@@ -163,41 +206,18 @@ export default function DailyTracker() {
 
   return (
     <div>
-      <DayNav date={activeDate} />
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <DayNav date={activeDate} onNavigate={handleDayNavigate} />
+        </div>
+        <ExportTasksButton />
+      </div>
 
       <div className="flex justify-end mb-2">
         <Link to={`/timeblock/${activeDate}`} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
           🗓 Time-Blocking view →
         </Link>
       </div>
-
-      <div className="flex items-start gap-1.5">
-        <div className="flex-1">
-          <QuickAddBar
-            date={activeDate}
-            onManualFallback={(recognized) => {
-              setPrefill(recognized)
-              setPrefillNonce((n) => n + 1)
-            }}
-          />
-        </div>
-        {aiConfigured && (
-          <button
-            type="button"
-            onClick={() => setCommandBarOpen((v) => !v)}
-            aria-label="Free-form command"
-            aria-pressed={commandBarOpen}
-            className={`text-sm px-2 py-2 rounded-lg border ${
-              commandBarOpen
-                ? 'bg-indigo-600 border-indigo-600 text-white'
-                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            ✨
-          </button>
-        )}
-      </div>
-      {commandBarOpen && <CommandBar onClose={() => setCommandBarOpen(false)} />}
 
       {showPlanBanner && (
         <div className="mb-4 p-2.5 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-500/10 text-xs flex items-center justify-between gap-2">
@@ -300,16 +320,11 @@ export default function DailyTracker() {
         />
       )}
 
-      <HabitWidget date={activeDate} />
-
-      <JournalEntryBox date={activeDate} />
-
       <AddTaskForm
         key={`${activeDate}-${prefillNonce}`}
         defaultDate={activeDate}
         onToggleTemplates={() => setTemplatesOpen((v) => !v)}
         prefill={prefillNonce > 0 ? prefill : undefined}
-        autoFocus={focusAdd}
       />
 
       {templatesOpen && <TemplatesPanel date={activeDate} onClose={() => setTemplatesOpen(false)} />}
@@ -400,6 +415,78 @@ export default function DailyTracker() {
               ).map(renderTask)}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Epic 89 (LR-1/LR-2/LR-9): Journal, Habit Tracker, then Quick-Add — always below the task
+          list and Completed section, in this order, even on an empty day. */}
+      <JournalEntryBox ref={journalRef} date={activeDate} onDirtyChange={setJournalDirty} />
+
+      <HabitWidget date={activeDate} />
+
+      <div className="flex items-start gap-1.5">
+        <div className="flex-1">
+          <QuickAddBar
+            ref={quickAddRef}
+            date={activeDate}
+            onDirtyChange={setQuickAddDirty}
+            onCreated={() => showToast('Task added')}
+            onManualFallback={(recognized) => {
+              setPrefill(recognized)
+              setPrefillNonce((n) => n + 1)
+            }}
+          />
+        </div>
+        {aiConfigured && (
+          <button
+            type="button"
+            onClick={() => setCommandBarOpen((v) => !v)}
+            aria-label="Free-form command"
+            aria-pressed={commandBarOpen}
+            className={`text-sm px-2 py-2 rounded-lg border ${
+              commandBarOpen
+                ? 'bg-indigo-600 border-indigo-600 text-white'
+                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            ✨
+          </button>
+        )}
+      </div>
+      {commandBarOpen && <CommandBar onClose={() => setCommandBarOpen(false)} />}
+
+      {pendingNavDate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-lg bg-white dark:bg-slate-800 p-4 space-y-3">
+            <p className="text-sm font-semibold">Unsaved changes</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              You have unsaved text in {journalDirty && quickAddDirty ? 'Journal and Quick-Add' : journalDirty ? 'Journal' : 'Quick-Add'}.
+              Save it before switching days, or discard it?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingNavDate(null)}
+                className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardNav}
+                className="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-xs text-red-600 dark:text-red-400"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSave}
+                className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-semibold"
+              >
+                Save &amp; continue
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import App from './App.tsx'
 import { SettingsProvider } from './context/SettingsContext.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
 import { SpotifyPlayerProvider } from './context/SpotifyPlayerContext.tsx'
+import { ToastProvider } from './context/ToastContext.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -13,7 +14,9 @@ createRoot(document.getElementById('root')!).render(
       <SettingsProvider>
         <AuthProvider>
           <SpotifyPlayerProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </SpotifyPlayerProvider>
         </AuthProvider>
       </SettingsProvider>
