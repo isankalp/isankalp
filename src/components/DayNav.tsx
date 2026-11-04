@@ -1,14 +1,25 @@
 import { useNavigate } from 'react-router-dom'
 import { addDays, formatDisplayDate, isToday, todayKey } from '../lib/date'
+import { intlLocale } from '../lib/i18n'
+import { useSettings } from '../context/SettingsContext'
 
-export default function DayNav({ date }: { date: string }) {
+/** LR-11: when `onNavigate` is given, every day-change action here routes through it instead of
+ *  navigating directly, so a parent with unsaved Journal/Quick-Add text can intercept and confirm
+ *  first. Without it, this navigates immediately, same as before. */
+export default function DayNav({ date, onNavigate }: { date: string; onNavigate?: (targetDate: string) => void }) {
   const navigate = useNavigate()
+  const { settings } = useSettings()
+
+  function goTo(targetDate: string) {
+    if (onNavigate) onNavigate(targetDate)
+    else navigate(`/day/${targetDate}`)
+  }
 
   return (
     <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
       <button
         type="button"
-        onClick={() => navigate(`/day/${addDays(date, -1)}`)}
+        onClick={() => goTo(addDays(date, -1))}
         className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs"
         aria-label="Previous day"
       >
@@ -16,7 +27,7 @@ export default function DayNav({ date }: { date: string }) {
       </button>
 
       <div className="flex items-center gap-1.5 text-center flex-wrap justify-center">
-        <span className="font-semibold text-sm">{formatDisplayDate(date)}</span>
+        <span className="font-semibold text-sm">{formatDisplayDate(date, intlLocale(settings.language))}</span>
         {isToday(date) ? (
           <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
             Today
@@ -24,7 +35,7 @@ export default function DayNav({ date }: { date: string }) {
         ) : (
           <button
             type="button"
-            onClick={() => navigate(`/day/${todayKey()}`)}
+            onClick={() => goTo(todayKey())}
             className="text-[11px] px-1.5 py-0.5 rounded-full border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             Jump to today
@@ -33,7 +44,7 @@ export default function DayNav({ date }: { date: string }) {
         <input
           type="date"
           value={date}
-          onChange={(e) => e.target.value && navigate(`/day/${e.target.value}`)}
+          onChange={(e) => e.target.value && goTo(e.target.value)}
           className="text-xs border border-slate-200 dark:border-slate-700 rounded-md px-1.5 py-0.5 bg-white dark:bg-slate-800"
           aria-label="Jump to date"
         />
@@ -41,7 +52,7 @@ export default function DayNav({ date }: { date: string }) {
 
       <button
         type="button"
-        onClick={() => navigate(`/day/${addDays(date, 1)}`)}
+        onClick={() => goTo(addDays(date, 1))}
         className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs"
         aria-label="Next day"
       >

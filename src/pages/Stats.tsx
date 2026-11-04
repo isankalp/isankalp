@@ -1,11 +1,14 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { db } from '../db/db'
 import { bucketTotals, breakdownByTitle, dailyTotals, fillMissingDays, trailingWindow, type Period } from '../lib/aggregate'
 import { completedDateKeys, currentStreak, longestStreak } from '../lib/streaks'
+import StreakDiagnosis from '../components/StreakDiagnosis'
 import { addDays, todayKey } from '../lib/date'
 import { useSettings } from '../context/SettingsContext'
+import { unitOf } from '../db/models'
 
 const periods: { value: Period; label: string }[] = [
   { value: 'day', label: 'Daily' },
@@ -23,7 +26,11 @@ export default function Stats() {
   const { settings } = useSettings()
   const colors = chartColors[settings.theme]
   const days = useLiveQuery(() => db.days.toArray(), []) ?? []
-  const tasks = useLiveQuery(() => db.tasks.toArray(), []) ?? []
+  const allTasks = useLiveQuery(() => db.tasks.toArray(), []) ?? []
+  // CU-4: these charts sum minutes across tasks, so only minutes-unit tasks are included — other
+  // units (pages, dollars, custom, ...) never get silently summed into a "minutes" number.
+  const tasks = allTasks.filter((t) => unitOf(t) === 'minutes')
+  const hasOtherUnits = allTasks.length > tasks.length
 
   const totals = dailyTotals(days, tasks)
   const windowed =
@@ -38,9 +45,32 @@ export default function Stats() {
 
   const breakdown = breakdownByTitle(tasks, days, addDays(todayKey(), -6)).slice(0, 8)
 
+  // DE-6: past days' deadline time + recorded Met/Missed outcome, viewable here. "Pending" covers
+  // today/future days whose outcome hasn't been frozen yet (DE-4/DE-5 only freeze past days).
+  const deadlineHistory = days
+    .filter((d) => d.deadlineTime)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 14)
+
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold">Stats & Streaks</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold">Stats & Streaks</h2>
+        <div className="flex items-center gap-3">
+          <Link to="/heatmap" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+            Heatmap →
+          </Link>
+          <Link to="/insights" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+            Insights →
+          </Link>
+        </div>
+      </div>
+
+      {hasOtherUnits && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 -mt-2">
+          These charts cover minutes-based tasks only — tasks in other units aren't summed in here.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-center">
@@ -52,6 +82,8 @@ export default function Stats() {
           <p className="text-xs text-slate-500 dark:text-slate-400">Longest streak (days)</p>
         </div>
       </div>
+
+      <StreakDiagnosis days={days} tasks={tasks} completedDates={completedDates} currentStreak={streak} />
 
       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
         <div className="flex items-center justify-between mb-3">
@@ -106,6 +138,34 @@ export default function Stats() {
               <li key={b.title} className="flex items-center justify-between text-xs">
                 <span>{b.title}</span>
                 <span className="font-medium tabular-nums">{b.minutes} min</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+        <h3 className="font-semibold text-sm mb-2">Deadline history</h3>
+        {deadlineHistory.length === 0 ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400">No deadlines set yet.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {deadlineHistory.map((d) => (
+              <li key={d.id} className="flex items-center justify-between text-xs">
+                <Link to={`/day/${d.date}`} className="hover:underline">
+                  {d.date} · due {d.deadlineTime}
+                </Link>
+                <span
+                  className={
+                    d.deadlineOutcome === 'met'
+                      ? 'font-medium text-emerald-600 dark:text-emerald-400'
+                      : d.deadlineOutcome === 'missed'
+                        ? 'font-medium text-red-700 dark:text-red-400'
+                        : 'text-slate-400'
+                  }
+                >
+                  {d.deadlineOutcome === 'met' ? '✅ Met' : d.deadlineOutcome === 'missed' ? '❌ Missed' : 'Pending'}
+                </span>
               </li>
             ))}
           </ul>

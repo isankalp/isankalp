@@ -1,0 +1,151 @@
+import { useEffect, useState } from 'react'
+import { useLiveQuery } from '../hooks/useLiveQuery'
+import { db } from '../db/db'
+import { useSettings } from '../context/SettingsContext'
+import { useSpotifyPlayer } from '../context/SpotifyPlayerContext'
+import { fetchUserPlaylists, type SpotifyPlaylist } from '../lib/spotifyPlayback'
+import { generateDeepWorkPlaylist } from '../lib/spotifyDeepWork'
+
+// Epic 62: maps a task's category to a Spotify playlist, so Focus Timer can pre-select (never
+// auto-play) the right music for the kind of work being done, instead of always defaulting to
+// whichever playlist happened to load first.
+export default function SpotifyFocusMusicSettings() {
+  const { connected } = useSpotifyPlayer()
+  const { settings, updateSettings } = useSettings()
+  const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [generateMessage, setGenerateMessage] = useState<string | null>(null)
+
+  const categorizedTasks = useLiveQuery(() => db.tasks.filter((t) => !!t.category).toArray(), []) ?? []
+  const categoryLabels = Array.from(new Set(categorizedTasks.map((t) => t.category!.label))).sort()
+
+  useEffect(() => {
+    if (!connected) return
+    fetchUserPlaylists()
+      .then((result) => {
+        if (result.ok) setPlaylists(result.data)
+        else setError(result.error)
+      })
+      .finally(() => setLoaded(true))
+  }, [connected])
+
+  if (!connected) return null
+
+  function setProfile(label: string, uri: string) {
+    const next = { ...settings.focusMusicProfiles }
+    if (uri) next[label] = uri
+    else delete next[label]
+    updateSettings({ focusMusicProfiles: next })
+  }
+
+  // Epic 63: builds a brand-new private playlist in the user's own Spotify account from a handful
+  // of focus-oriented search terms — a genuine new playlist, not just picking one that exists.
+  async function handleGenerateDeepWork() {
+    setGenerating(true)
+    setGenerateMessage(null)
+    const result = await generateDeepWorkPlaylist(`Deep Work — Goals Tracker ${new Date().toLocaleDateString()}`)
+    if (result.ok) {
+      setPlaylists((prev) => [result.data, ...prev])
+      setGenerateMessage(`Created "${result.data.name}" with ${result.data.trackCount} tracks — assign it below.`)
+    } else {
+      setGenerateMessage(result.error)
+    }
+    setGenerating(false)
+  }
+
+  return (
+    <>
+      <h2 className="text-lg font-bold mt-6 mb-3">Focus Music</h2>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3">
+        <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div>
+            <p className="font-medium text-sm">Do Not Disturb while playing</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Mutes this app's own reminder notifications while Spotify focus music is playing.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings.dndDuringFocusMusic}
+            onChange={(e) => updateSettings({ dndDuringFocusMusic: e.target.checked })}
+            aria-label="Do Not Disturb while Spotify focus music is playing"
+            className="w-4 h-4 shrink-0"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div>
+            <p className="font-medium text-sm">Generate a Deep Work playlist</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Creates a new private playlist in your Spotify account, seeded for focused work.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerateDeepWork}
+            disabled={generating}
+            className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
+          >
+            {generating ? 'Generating…' : '✨ Generate'}
+          </button>
+        </div>
+        {generateMessage && <p className="text-xs text-slate-500 dark:text-slate-400 pb-2">{generateMessage}</p>}
+
+        {error && <p className="text-xs text-red-600 dark:text-red-400 py-2">{error}</p>}
+        {!loaded ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400 py-3">Loading your playlists…</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-4 py-3 border-b border-slate-200 dark:border-slate-700 last:border-0">
+              <div>
+                <p className="font-medium text-sm">Default</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Used for tasks with no category, or no profile below.</p>
+              </div>
+              <select
+                value={settings.focusMusicDefaultPlaylist}
+                onChange={(e) => updateSettings({ focusMusicDefaultPlaylist: e.target.value })}
+                aria-label="Default focus music playlist"
+                className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs max-w-[10rem]"
+              >
+                <option value="">— none —</option>
+                {playlists.map((p) => (
+                  <option key={p.id} value={p.uri}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {categoryLabels.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400 py-3">
+                Tag a task with a category (its row's 🏷️ button) to set a playlist just for that kind of work.
+              </p>
+            ) : (
+              categoryLabels.map((label) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between gap-4 py-3 border-b border-slate-200 dark:border-slate-700 last:border-0"
+                >
+                  <p className="font-medium text-sm">{label}</p>
+                  <select
+                    value={settings.focusMusicProfiles[label] ?? ''}
+                    onChange={(e) => setProfile(label, e.target.value)}
+                    aria-label={`Focus music playlist for ${label}`}
+                    className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs max-w-[10rem]"
+                  >
+                    <option value="">Use default</option>
+                    {playlists.map((p) => (
+                      <option key={p.id} value={p.uri}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))
+            )}
+          </>
+        )}
+      </div>
+    </>
+  )
+}

@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { createContext, useContext, useEffect, type ReactNode } from 'react'
 import { db } from '../db/db'
 import { DEFAULT_SETTINGS, type Settings } from '../db/models'
@@ -11,7 +11,8 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null)
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const settings = useLiveQuery(() => db.settings.get('settings'), []) ?? DEFAULT_SETTINGS
+  const stored = useLiveQuery(() => db.settings.get('settings'), [])
+  const settings = { ...DEFAULT_SETTINGS, ...stored }
 
   useEffect(() => {
     db.settings.get('settings').then((existing) => {
@@ -23,9 +24,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
   }, [settings.theme])
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('high-contrast', settings.highContrast)
+  }, [settings.highContrast])
+
   async function updateSettings(patch: Partial<Omit<Settings, 'id'>>) {
-    const current = (await db.settings.get('settings')) ?? DEFAULT_SETTINGS
-    await db.settings.put({ ...current, ...patch })
+    const current = await db.settings.get('settings')
+    await db.settings.put({ ...DEFAULT_SETTINGS, ...current, ...patch })
   }
 
   return (

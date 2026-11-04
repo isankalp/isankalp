@@ -29,6 +29,12 @@ export function currentStreak(completedDates: Set<string>): number {
   return streak
 }
 
+/** AI-3: the most recent date with a completed task, used to find where a broken streak stopped. */
+export function lastCompletedDate(completedDates: Set<string>): string | null {
+  if (completedDates.size === 0) return null
+  return [...completedDates].sort().at(-1) ?? null
+}
+
 export function longestStreak(completedDates: Set<string>): number {
   if (completedDates.size === 0) return 0
   const sorted = [...completedDates].sort()

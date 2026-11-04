@@ -4,12 +4,21 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { SettingsProvider } from './context/SettingsContext.tsx'
+import { AuthProvider } from './context/AuthContext.tsx'
+import { SpotifyPlayerProvider } from './context/SpotifyPlayerContext.tsx'
+import { ToastProvider } from './context/ToastContext.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <SettingsProvider>
-        <App />
+        <AuthProvider>
+          <SpotifyPlayerProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </SpotifyPlayerProvider>
+        </AuthProvider>
       </SettingsProvider>
     </BrowserRouter>
   </StrictMode>,
