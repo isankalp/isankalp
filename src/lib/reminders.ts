@@ -1,7 +1,8 @@
 import { db } from '../db/db'
-import type { Day, Settings, Task } from '../db/models'
+import type { Day, Settings, Task, WeeklyPlan, WeeklyTask } from '../db/models'
 import { deadlineTimestamp, tasksRemainingCount } from './deadline'
 import { todayKey } from './date'
+import { weeklyPlanDisplayName, weeklyPlanState, weeklyPlanToTimestamp } from './weekly'
 
 export function notificationSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window
@@ -22,6 +23,16 @@ function alreadyFiredToday(key: string): boolean {
 
 function markFiredToday(key: string): void {
   localStorage.setItem(key, todayKey())
+}
+
+/** WI-5: a plan's lead-time reminder fires at most once ever (not once per calendar day — its lead
+ *  window can straddle midnight), so this dedup is never date-scoped like the daily ones above. */
+function alreadyFired(key: string): boolean {
+  return localStorage.getItem(key) === 'fired'
+}
+
+function markFired(key: string): void {
+  localStorage.setItem(key, 'fired')
 }
 
 function parseThreshold(hhmm: string): number {
@@ -54,6 +65,27 @@ function checkDeadlineReminder(day: Day | undefined, tasks: Task[], settings: Se
   markFiredToday(key)
 }
 
+/** WI-5/WI-6: a lead-time nudge before an Active plan's To moment, firing at most once per plan,
+ *  only while it still has non-blocked tasks below 100%. Never fires for an Upcoming or Ended plan,
+ *  or once every non-blocked task is already done. */
+function checkWeeklyPlanReminders(plans: WeeklyPlan[], tasksByPlanId: Map<string, WeeklyTask[]>, settings: Settings): void {
+  const now = Date.now()
+  for (const plan of plans) {
+    if (weeklyPlanState(plan, now) !== 'active') continue
+    const toAt = weeklyPlanToTimestamp(plan)
+    const leadMs = settings.weeklyReminderLeadHours * 60 * 60 * 1000
+    if (now < toAt - leadMs) continue
+    const remaining = tasksRemainingCount(tasksByPlanId.get(plan.id) ?? [])
+    if (remaining === 0) continue
+    const key = `reminder:weekly:${plan.id}`
+    if (alreadyFired(key)) continue
+    new Notification('Weekly plan deadline approaching', {
+      body: `"${weeklyPlanDisplayName(plan)}" due ${plan.toDate} ${plan.toTime} — ${remaining} task${remaining === 1 ? '' : 's'} remaining.`,
+    })
+    markFired(key)
+  }
+}
+
 export async function checkReminders(settings: Settings): Promise<void> {
   if (!settings.remindersEnabled || notificationPermission() !== 'granted') return
 
@@ -63,6 +95,18 @@ export async function checkReminders(settings: Settings): Promise<void> {
   const tasks = day ? await db.tasks.where('dayId').equals(day.id).toArray() : []
 
   checkDeadlineReminder(day, tasks, settings)
+
+  const weeklyPlans = await db.weeklyPlans.toArray()
+  if (weeklyPlans.length > 0) {
+    const weeklyTasks = await db.weeklyTasks.toArray()
+    const tasksByPlanId = new Map<string, WeeklyTask[]>()
+    for (const task of weeklyTasks) {
+      const list = tasksByPlanId.get(task.planId) ?? []
+      list.push(task)
+      tasksByPlanId.set(task.planId, list)
+    }
+    checkWeeklyPlanReminders(weeklyPlans, tasksByPlanId, settings)
+  }
 
   if (tasks.length === 0) {
     if (nowMin >= parseThreshold(settings.eveningNudgeTime) && !alreadyFiredToday('reminder:empty-day')) {

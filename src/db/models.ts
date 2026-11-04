@@ -275,6 +275,9 @@ export interface Settings {
   /** DI-2: minutes before a day's deadline that the reminder notification fires, when reminders are
    *  enabled and that day has a deadline set. Never fires at all otherwise (DI-3). */
   deadlineReminderLeadMinutes: number
+  /** WI-5/WI-6: hours before a weekly plan's To time that its lead-time reminder fires, when
+   *  reminders are enabled and the plan still has incomplete non-blocked tasks. */
+  weeklyReminderLeadHours: number
 }
 
 export type GridDensity = 'compact' | 'comfortable'
@@ -319,6 +322,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gridSectionFilter: '',
   gridScrollAnchorDate: '',
   deadlineReminderLeadMinutes: 60,
+  weeklyReminderLeadHours: 24,
 }
 
 /** A single free-text daily journal entry (Epic 57's prerequisite — never built as its own "v5"
@@ -420,6 +424,55 @@ export interface GridCell {
   createdAt: number
 }
 
+// --- Weekly Tasks Module (v17, Epics 92-98) ---
+
+/** A user-defined period (not necessarily 7 days) that owns its own set of tasks, independent of
+ *  the daily Task/Day model (WT-8: a weekly task never appears in the daily list or any other
+ *  plan). From/To are split date+time, combined via weeklyPlanFromTimestamp/ToTimestamp. */
+export interface WeeklyPlan {
+  id: string
+  /** Optional at creation (WP-4) — weeklyPlanDisplayName() supplies "Week of [From date]" when empty. */
+  name: string
+  fromDate: string // YYYY-MM-DD
+  fromTime: string // HH:MM, 24h local
+  toDate: string
+  toTime: string
+  createdAt: number
+  updatedAt: number
+  /** Frozen the first time it's observed after the plan ends (WD-11), mirroring Day.deadlineOutcome's
+   *  frozen-at-first-observation pattern — never recomputed afterward. */
+  deadlineOutcome?: 'met' | 'missed'
+}
+
+/** A task that belongs to exactly one WeeklyPlan (WT-8), never a Day. Deliberately the same field
+ *  shape as Task wherever one exists (title, minutesPerSubtask, totalSubtasks, completedSubtasks,
+ *  priority, notes, subtaskItems, category, unit, customUnitLabel, customFieldValues, the Blocked
+ *  fields) so every Pick-typed pure function below that operates on Task also operates on
+ *  WeeklyTask unchanged — only planId replaces dayId, and daily-only concerns (dependsOnTaskId,
+ *  rolledOverFrom*, actualMinutes, energyRating, googleEventId, scheduledStart/Duration) are omitted
+ *  since nothing in this module's PRD calls for them. */
+export interface WeeklyTask {
+  id: string
+  title: string
+  planId: string
+  minutesPerSubtask: number
+  totalSubtasks: number
+  completedSubtasks: number
+  priority: Priority
+  notes?: string
+  subtaskItems?: SubtaskItem[]
+  category?: TaskCategory
+  customFieldValues?: Record<string, string | number>
+  unit?: UnitType
+  customUnitLabel?: string
+  blockedAt?: number
+  blockedReason?: string
+  hasBeenBlocked?: boolean
+  blockedRejectedAt?: number
+  createdAt: number
+  updatedAt: number
+}
+
 /** Clamp completedSubtasks into [0, totalSubtasks], rounding to whole units. */
 export function clampCompleted(completed: number, totalSubtasks: number): number {
   const total = Math.max(0, Math.floor(totalSubtasks) || 0)
@@ -449,16 +502,21 @@ export function isTaskBlocked(task: Pick<Task, 'blockedAt'>): boolean {
   return task.blockedAt !== undefined
 }
 
+/** The minimal shape the day/plan rollup functions below need — Pick-typed (rather than full Task)
+ *  so they also work unchanged on WeeklyTask[] (v17's plan totals, Epic 94), which shares every one
+ *  of these fields. */
+type AmountTask = Pick<Task, 'blockedAt' | 'minutesPerSubtask' | 'totalSubtasks' | 'completedSubtasks'>
+
 /** BD-2: Blocked tasks' minutes are excluded entirely from day-level totals. */
-export function dayMinutesPlanned(tasks: Task[]): number {
+export function dayMinutesPlanned(tasks: AmountTask[]): number {
   return tasks.filter((t) => !isTaskBlocked(t)).reduce((sum, t) => sum + totalMinutes(t), 0)
 }
 
-export function dayMinutesDone(tasks: Task[]): number {
+export function dayMinutesDone(tasks: AmountTask[]): number {
   return tasks.filter((t) => !isTaskBlocked(t)).reduce((sum, t) => sum + minutesDone(t), 0)
 }
 
-export function dayPercentComplete(tasks: Task[]): number {
+export function dayPercentComplete(tasks: AmountTask[]): number {
   const planned = dayMinutesPlanned(tasks)
   if (planned <= 0) return 0
   return Math.round((dayMinutesDone(tasks) / planned) * 100)
@@ -471,7 +529,7 @@ export type DayCompletionState = 'complete' | 'incomplete' | 'none'
  *  an unstarted task is incomplete exactly like a past one). Epic 80 (BD-3/BD-4): Blocked tasks
  *  never count toward the "any incomplete = red" rule, and a day left with only Blocked tasks (none
  *  Active/Completed) renders neutral, identical to a day with zero tasks. */
-export function dayCompletionState(tasks: Task[]): DayCompletionState {
+export function dayCompletionState(tasks: AmountTask[]): DayCompletionState {
   const relevant = tasks.filter((t) => !isTaskBlocked(t))
   if (relevant.length === 0) return 'none'
   return relevant.every((t) => isTaskComplete(t)) ? 'complete' : 'incomplete'
@@ -480,8 +538,9 @@ export function dayCompletionState(tasks: Task[]): DayCompletionState {
 /** Epic 73 (DP-1/DP-5): unit-agnostic aggregate percent — sums completedSubtasks/totalSubtasks
  *  across every task on the day regardless of unit, distinct from dayPercentComplete's
  *  minutes-weighted number. null (never "0%") for a day with no tasks. Epic 80 (BD-2): Blocked
- *  tasks' totalSubtasks/completedSubtasks are excluded entirely from both sums. */
-export function dayAggregatePercent(tasks: Task[]): number | null {
+ *  tasks' totalSubtasks/completedSubtasks are excluded entirely from both sums. Also v17/WG-2/WG-4's
+ *  plan percent, which uses the exact same formula. */
+export function dayAggregatePercent(tasks: AmountTask[]): number | null {
   const relevant = tasks.filter((t) => !isTaskBlocked(t))
   const totalSum = relevant.reduce((s, t) => s + t.totalSubtasks, 0)
   if (totalSum <= 0) return null
@@ -491,7 +550,7 @@ export function dayAggregatePercent(tasks: Task[]): number | null {
 
 const PRIORITY_RANK: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 }
 
-export function sortByPriority(tasks: Task[]): Task[] {
+export function sortByPriority<T extends Pick<Task, 'priority' | 'createdAt'>>(tasks: T[]): T[] {
   return [...tasks].sort((a, b) => {
     const rank = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
     return rank !== 0 ? rank : a.createdAt - b.createdAt
@@ -539,8 +598,8 @@ export function isCustomUnitValid(unit: UnitType, customUnitLabel: string): bool
   return unit !== 'custom' || customUnitLabel.trim().length > 0
 }
 
-export function groupTasksByUnit(tasks: Task[]): Map<string, Task[]> {
-  const map = new Map<string, Task[]>()
+export function groupTasksByUnit<T extends Pick<Task, 'unit' | 'customUnitLabel'>>(tasks: T[]): Map<string, T[]> {
+  const map = new Map<string, T[]>()
   for (const task of tasks) {
     const key = unitKey(task)
     const list = map.get(key) ?? []
@@ -558,8 +617,10 @@ export interface UnitTotal {
   percent: number
 }
 
-/** CU-4: day/stats rollups are grouped and shown separately per unit, never summed across incompatible units. */
-export function dayUnitTotals(tasks: Task[]): UnitTotal[] {
+/** CU-4: day/stats rollups are grouped and shown separately per unit, never summed across incompatible
+ *  units. Pick-typed via AmountTask & the unit fields so this also works unchanged on WeeklyTask[]
+ *  (v17/WG-1's per-unit plan totals). */
+export function dayUnitTotals(tasks: (AmountTask & Pick<Task, 'unit' | 'customUnitLabel'>)[]): UnitTotal[] {
   const groups = groupTasksByUnit(tasks)
   return [...groups.entries()]
     .map(([key, groupTasks]) => ({

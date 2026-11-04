@@ -24,8 +24,9 @@ export function canSaveDeadline(date: string, time: string, now: number = Date.n
   return deadlineTimestamp(date, time) > now
 }
 
-/** DI-4: Blocked tasks are never counted, on top of the usual "not yet at 100%" filter. */
-export function tasksRemainingCount(tasks: Task[]): number {
+/** DI-4/WD-7: Blocked tasks are never counted, on top of the usual "not yet at 100%" filter.
+ *  Pick-typed so it's directly reusable for WeeklyTask (v17), which shares these fields. */
+export function tasksRemainingCount(tasks: Pick<Task, 'blockedAt' | 'totalSubtasks' | 'completedSubtasks'>[]): number {
   return tasks.filter((t) => !isTaskBlocked(t) && !isTaskComplete(t)).length
 }
 

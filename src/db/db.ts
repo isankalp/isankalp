@@ -27,6 +27,8 @@ import {
   type Template,
   type VoiceNote,
   type WebhookQueueItem,
+  type WeeklyPlan,
+  type WeeklyTask,
 } from './models'
 
 export const ALL_TABLE_NAMES = [
@@ -51,6 +53,8 @@ export const ALL_TABLE_NAMES = [
   'gridSections',
   'gridRows',
   'gridCells',
+  'weeklyPlans',
+  'weeklyTasks',
 ] as const
 
 export type TableName = (typeof ALL_TABLE_NAMES)[number]
@@ -77,6 +81,8 @@ export class GoalsDB extends Dexie {
   gridSections!: Table<GridSection, string>
   gridRows!: Table<GridRow, string>
   gridCells!: Table<GridCell, string>
+  weeklyPlans!: Table<WeeklyPlan, string>
+  weeklyTasks!: Table<WeeklyTask, string>
 
   constructor(name: string) {
     super(name)
@@ -252,6 +258,31 @@ export class GoalsDB extends Dexie {
       gridSections: 'id, order',
       gridRows: 'id, sectionId, order',
       gridCells: 'id, rowId, date, &[rowId+date]',
+    })
+    this.version(10).stores({
+      tasks: 'id, dayId, title, createdAt, templateId, dependsOnTaskId',
+      days: 'id, &date',
+      goals: 'id, title, archivedAt',
+      settings: 'id',
+      habits: 'id, archivedAt',
+      habitLogs: 'id, habitId, date, &[habitId+date]',
+      templates: 'id, archivedAt',
+      reviews: 'id, periodType, periodKey',
+      badges: 'id, type',
+      completionEvents: 'id, taskId, at',
+      voiceNotes: 'id, taskId, createdAt',
+      customFields: 'id, name',
+      taskHistory: 'id, taskId, at',
+      webhookQueue: 'id, createdAt',
+      completionPhotos: 'id, taskId, completionEventId, createdAt',
+      journalEntries: 'id, &date',
+      lifestyleFields: 'id, order, archivedAt',
+      lifestyleEntries: 'id, date, fieldId, &[date+fieldId]',
+      gridSections: 'id, order',
+      gridRows: 'id, sectionId, order',
+      gridCells: 'id, rowId, date, &[rowId+date]',
+      weeklyPlans: 'id, fromDate, toDate, createdAt',
+      weeklyTasks: 'id, planId, title, createdAt',
     })
   }
 }

@@ -4,6 +4,7 @@ import { useLiveQuery } from '../hooks/useLiveQuery'
 import { db } from '../db/db'
 import ChartErrorBoundary from '../components/ChartErrorBoundary'
 import DashboardCountdownWidget from '../components/DashboardCountdownWidget'
+import DashboardWeeklyWidget from '../components/DashboardWeeklyWidget'
 import HabitWidget from '../components/HabitWidget'
 import LifestyleModal from '../components/LifestyleModal'
 import { useSettings } from '../context/SettingsContext'
@@ -136,6 +137,9 @@ export default function Dashboard() {
   const allTasksForStreak = useLiveQuery(() => db.tasks.toArray(), []) ?? []
   const everHadAnyTask = useLiveQuery(() => db.tasks.count(), []) ?? 0
   const everHadAnyGoal = useLiveQuery(() => db.goals.count(), []) ?? 0
+  // WI-2: an account that only ever used Weekly Plans (never a single daily task/goal) must still
+  // reach the real Dashboard to see its active-plan widget, not get stuck on the welcome screen.
+  const everHadAnyWeeklyPlan = useLiveQuery(() => db.weeklyPlans.count(), []) ?? 0
 
   // DP-1/DP-4/DP-5: unit-agnostic aggregate percent, not the old minutes-weighted dayPercentComplete.
   // BD-2: Blocked tasks are excluded from every one of these today-stats, same as the day-level totals.
@@ -176,7 +180,7 @@ export default function Dashboard() {
 
   // DB-8: a brand-new account with genuinely nothing yet — the onboarding wizard already handles
   // first-run guidance, so this only covers the case where onboarding was skipped/dismissed early.
-  if (everHadAnyTask === 0 && everHadAnyGoal === 0) {
+  if (everHadAnyTask === 0 && everHadAnyGoal === 0 && everHadAnyWeeklyPlan === 0) {
     return (
       <div className="text-center py-12">
         <h2 className="text-lg font-bold mb-2">Welcome to Goals Tracker</h2>
@@ -233,6 +237,10 @@ export default function Dashboard() {
 
       <ChartErrorBoundary label="the deadline countdown">
         <DashboardCountdownWidget day={day} tasks={tasks} />
+      </ChartErrorBoundary>
+
+      <ChartErrorBoundary label="the weekly plans widget">
+        <DashboardWeeklyWidget />
       </ChartErrorBoundary>
 
       <button

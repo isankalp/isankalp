@@ -2,8 +2,10 @@ import { db, getOrCreateDay, updateTaskTracked } from '../db/db'
 import { isTaskBlocked, isTaskComplete, type Day, type Task } from '../db/models'
 import { daysBetween, todayKey } from './date'
 
-/** BK-5/BK-1: only an Active (not already Blocked, not already complete) task can be marked Blocked. */
-export function canMarkBlocked(task: Task): boolean {
+/** BK-5/BK-1: only an Active (not already Blocked, not already complete) task can be marked Blocked.
+ *  Pick-typed (rather than full Task) so it's directly reusable for WeeklyTask (v17/WB-4), which
+ *  shares these exact fields. */
+export function canMarkBlocked(task: Pick<Task, 'blockedAt' | 'totalSubtasks' | 'completedSubtasks'>): boolean {
   return !isTaskBlocked(task) && !isTaskComplete(task)
 }
 

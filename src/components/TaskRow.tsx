@@ -557,7 +557,7 @@ export default function TaskRow({
   )
 }
 
-function CategoryEditor({
+export function CategoryEditor({
   initial,
   onSave,
   onCancel,

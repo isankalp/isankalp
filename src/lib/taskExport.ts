@@ -15,11 +15,32 @@ import { todayKey } from './date'
 
 export type TaskExportStatus = 'Active' | 'Completed' | 'Blocked' | 'Rejected'
 
+/** The fields every export helper below needs — Pick-typed (rather than full Task) so they're all
+ *  directly reusable for WeeklyTask (v17/lib/weeklyExport.ts), which shares every one of them. */
+export type ExportableTask = Pick<
+  Task,
+  | 'title'
+  | 'blockedRejectedAt'
+  | 'blockedAt'
+  | 'totalSubtasks'
+  | 'completedSubtasks'
+  | 'subtaskItems'
+  | 'category'
+  | 'unit'
+  | 'customUnitLabel'
+  | 'minutesPerSubtask'
+  | 'priority'
+  | 'notes'
+  | 'blockedReason'
+  | 'createdAt'
+  | 'customFieldValues'
+>
+
 /** EF-4/EF-6/SX-10: Rejected and Blocked are checked before Completed so a task carrying partial
  *  progress while Blocked/Rejected is never mislabeled Completed, on any of its exported rows.
  *  Mutually exclusive by construction (rejectBlockedTask always clears blockedAt), but checked
  *  defensively anyway. */
-export function taskExportStatus(task: Task): TaskExportStatus {
+export function taskExportStatus(task: Pick<ExportableTask, 'blockedRejectedAt' | 'blockedAt' | 'totalSubtasks' | 'completedSubtasks'>): TaskExportStatus {
   if (task.blockedRejectedAt !== undefined) return 'Rejected'
   if (isTaskBlocked(task)) return 'Blocked'
   if (isTaskComplete(task)) return 'Completed'
@@ -48,8 +69,8 @@ const TASK_COLUMNS = [
 
 export type SubtaskStatus = 'Done' | 'Not Done'
 
-interface ExpandedSubtaskRow {
-  task: Task
+export interface ExpandedSubtaskRow<T> {
+  task: T
   mainTask: string
   subtaskIndex: number
   subtaskName: string
@@ -63,7 +84,9 @@ interface ExpandedSubtaskRow {
  * by GL-5, so only a defensive case) — exports as exactly one row self-linked to its own name,
  * whose Done/Not Done status reflects the task's own 100% completion rather than any item.
  */
-function expandTaskToSubtaskRows(task: Task): ExpandedSubtaskRow[] {
+export function expandTaskToSubtaskRows<T extends Pick<ExportableTask, 'title' | 'subtaskItems' | 'totalSubtasks' | 'completedSubtasks'>>(
+  task: T,
+): ExpandedSubtaskRow<T>[] {
   const items = task.subtaskItems
   if (items && items.length > 0) {
     return items.map((item, i) => ({
@@ -88,14 +111,18 @@ function expandTaskToSubtaskRows(task: Task): ExpandedSubtaskRow[] {
 /** EF-10: joined with semicolons into a single cell. This codebase's only tag-like field today is
  *  the single category label (AddTaskForm's own UI calls it a "tag") — exported as a one-element
  *  list rather than hardcoding a single value, so this keeps working if multi-tag support is ever added. */
-function taskTags(task: Task): string[] {
+export function taskTags(task: Pick<ExportableTask, 'category'>): string[] {
   return task.category ? [task.category.label] : []
 }
 
-/** SX-9: the Epic 88 task-level values, identical on every one of this task's expanded rows. */
-function taskLevelValues(task: Task, customFields: CustomFieldDef[]): string[] {
+/** SX-9: the Epic 88 task-level values, identical on every one of this task's expanded rows.
+ *  `includeTitle` defaults true for the daily export's own Title column; the weekly export (v17)
+ *  passes false since its Main Task column already covers the task's name (WX-7 lists no separate
+ *  Title column). */
+export function taskLevelValues(task: ExportableTask, customFields: CustomFieldDef[], options: { includeTitle?: boolean } = {}): string[] {
+  const { includeTitle = true } = options
   return [
-    task.title,
+    ...(includeTitle ? [task.title] : []),
     taskExportStatus(task),
     unitLabel(task),
     String(task.minutesPerSubtask),

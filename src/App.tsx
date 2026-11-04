@@ -14,6 +14,7 @@ import { ensureRecurringTasksGenerated } from './lib/recurrence'
 import { checkAndAwardBadges } from './lib/badges'
 import { checkReminders } from './lib/reminders'
 import { ensurePastDeadlineOutcomesFrozen } from './lib/deadline'
+import { ensureEndedWeeklyPlanOutcomesFrozen } from './lib/weekly'
 import { hasOnboarded } from './lib/onboarding'
 import { checkAutoBackup } from './lib/autoBackup'
 import { flushWebhookQueue } from './lib/webhookQueue'
@@ -31,6 +32,8 @@ const Ask = lazy(() => import('./pages/Ask'))
 const JournalInsights = lazy(() => import('./pages/JournalInsights'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Grid = lazy(() => import('./pages/Grid'))
+const Weekly = lazy(() => import('./pages/Weekly'))
+const WeeklyPlanDetail = lazy(() => import('./pages/WeeklyPlanDetail'))
 
 function Root() {
   const { settings } = useSettings()
@@ -75,6 +78,13 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
 
+  // WD-11: same frozen-at-first-observation sweep, for ended weekly plans.
+  useEffect(() => {
+    ensureEndedWeeklyPlanOutcomesFrozen()
+    const id = setInterval(ensureEndedWeeklyPlanOutcomesFrozen, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   useEffect(() => {
     checkAutoBackup(settings)
     const id = setInterval(() => checkAutoBackup(settings), 60 * 60_000)
@@ -113,6 +123,22 @@ export default function App() {
           }
         />
         <Route path="/goals" element={<Goals />} />
+        <Route
+          path="/weekly"
+          element={
+            <Suspense fallback={null}>
+              <Weekly />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/weekly/:planId"
+          element={
+            <Suspense fallback={null}>
+              <WeeklyPlanDetail />
+            </Suspense>
+          }
+        />
         <Route
           path="/grid"
           element={
